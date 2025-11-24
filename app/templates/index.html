@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Gestão Financeira{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard Financeiro</h1>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-wallet"></i> Saldo Total</h5>
+                <h2>R$ {{ "%.2f"|format(saldo_total) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-arrow-down-circle"></i> Receitas do Mês</h5>
+                <h2>R$ {{ "%.2f"|format(receitas_mes) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-arrow-up-circle"></i> Despesas do Mês</h5>
+                <h2>R$ {{ "%.2f"|format(despesas_mes) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-credit-card"></i> Faturas Abertas</h5>
+                <h2>R$ {{ "%.2f"|format(total_faturas) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-bank"></i> Minhas Contas</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for conta in contas %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ conta.nome }}</strong>
+                                <br>
+                                <small class="text-muted">{{ conta.tipo|capitalize }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">
+                                R$ {{ "%.2f"|format(conta.saldo_atual) }}
+                            </span>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Nenhuma conta cadastrada.</p>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('main.nova_conta') }}" class="btn btn-primary mt-3">
+                    <i class="bi bi-plus-circle"></i> Nova Conta
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-receipt"></i> Faturas Pendentes</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for fatura in faturas_abertas[:5] %}
+                        <a href="{{ url_for('main.ver_fatura', id=fatura.id) }}"
+                           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ fatura.cartao.nome }}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }} -
+                                    Venc: {{ fatura.data_vencimento.strftime('%d/%m/%Y') }}
+                                </small>
+                            </div>
+                            <span class="badge bg-warning rounded-pill">
+                                R$ {{ "%.2f"|format(fatura.valor_total) }}
+                            </span>
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Nenhuma fatura pendente.</p>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-primary mt-3">
+                    <i class="bi bi-eye"></i> Ver Todas
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-plus-circle"></i> Ações Rápidas</h5>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-success me-2">
+                    <i class="bi bi-cash-coin"></i> Nova Transação
+                </a>
+                <a href="{{ url_for('main.novo_cartao') }}" class="btn btn-info me-2">
+                    <i class="bi bi-credit-card"></i> Novo Cartão
+                </a>
+                <a href="{{ url_for('main.nova_fatura') }}" class="btn btn-warning me-2">
+                    <i class="bi bi-receipt"></i> Nova Fatura
+                </a>
+                <a href="{{ url_for('main.relatorios') }}" class="btn btn-primary">
+                    <i class="bi bi-graph-up"></i> Ver Relatórios
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

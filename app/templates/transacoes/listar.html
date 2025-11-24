@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Transações - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Transações</h1>
+    <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Nova Transação
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Conta</th>
+                    <th>Tipo</th>
+                    <th>Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transacao in transacoes.items %}
+                <tr>
+                    <td>{{ transacao.data.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ transacao.descricao }}</td>
+                    <td>{{ transacao.categoria.nome }}</td>
+                    <td>{{ transacao.conta.nome }}</td>
+                    <td>
+                        {% if transacao.tipo == 'receita' %}
+                            <span class="badge bg-success">Receita</span>
+                        {% else %}
+                            <span class="badge bg-danger">Despesa</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if transacao.tipo == 'receita' %}
+                            <span class="text-success">+ R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                        {% else %}
+                            <span class="text-danger">- R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">
+                        Nenhuma transação cadastrada.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if transacoes.pages > 1 %}
+        <nav>
+            <ul class="pagination justify-content-center">
+                {% if transacoes.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.prev_num) }}">Anterior</a>
+                    </li>
+                {% endif %}
+
+                {% for page_num in range(1, transacoes.pages + 1) %}
+                    {% if page_num == transacoes.page %}
+                        <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                    {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('main.listar_transacoes', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if transacoes.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.next_num) }}">Próxima</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

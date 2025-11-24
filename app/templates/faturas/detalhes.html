@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Fatura {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }} - {{ fatura.cartao.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Fatura {{ fatura.cartao.nome }}</h1>
+    <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5>Informações da Fatura</h5>
+                <p>
+                    <strong>Referência:</strong> {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }}<br>
+                    <strong>Fechamento:</strong> {{ fatura.data_fechamento.strftime('%d/%m/%Y') }}<br>
+                    <strong>Vencimento:</strong> {{ fatura.data_vencimento.strftime('%d/%m/%Y') }}<br>
+                    <strong>Valor Total:</strong> R$ {{ "%.2f"|format(fatura.valor_total) }}<br>
+                    <strong>Valor Pago:</strong> R$ {{ "%.2f"|format(fatura.valor_pago) }}<br>
+                    <strong>Status:</strong>
+                    {% if fatura.status == 'paga' %}
+                        <span class="badge bg-success">Paga</span>
+                    {% elif fatura.status == 'fechada' %}
+                        <span class="badge bg-warning">Fechada</span>
+                    {% elif fatura.status == 'vencida' %}
+                        <span class="badge bg-danger">Vencida</span>
+                    {% else %}
+                        <span class="badge bg-info">Aberta</span>
+                    {% endif %}
+                </p>
+
+                {% if fatura.status != 'paga' %}
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#pagarModal">
+                    <i class="bi bi-cash"></i> Pagar Fatura
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Transações da Fatura</h5>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transacao in transacoes %}
+                <tr>
+                    <td>{{ transacao.data.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ transacao.descricao }}</td>
+                    <td>{{ transacao.categoria.nome }}</td>
+                    <td>R$ {{ "%.2f"|format(transacao.valor) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">
+                        Nenhuma transação nesta fatura.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Pagar Fatura -->
+<div class="modal fade" id="pagarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pagar Fatura</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('main.pagar_fatura', id=fatura.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="valor_pago" class="form-label">Valor a Pagar</label>
+                        <input type="number" step="0.01" class="form-control" id="valor_pago"
+                               name="valor_pago" value="{{ fatura.valor_total }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="conta_id" class="form-label">Conta para Débito</label>
+                        <select class="form-select" id="conta_id" name="conta_id" required>
+                            <option value="">Selecione...</option>
+                            <!-- Esta lista será preenchida via JavaScript ou passar contas no contexto -->
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar Pagamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

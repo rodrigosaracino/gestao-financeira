@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Fatura - Gestão Financeira{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Nova Fatura</h1>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="cartao_id" class="form-label">Cartão</label>
+                <select class="form-select" id="cartao_id" name="cartao_id" required>
+                    <option value="">Selecione...</option>
+                    {% for cartao in cartoes %}
+                        <option value="{{ cartao.id }}">{{ cartao.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="mes_referencia" class="form-label">Mês de Referência</label>
+                        <select class="form-select" id="mes_referencia" name="mes_referencia" required>
+                            <option value="">Selecione...</option>
+                            {% for i in range(1, 13) %}
+                                <option value="{{ i }}">{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="ano_referencia" class="form-label">Ano de Referência</label>
+                        <input type="number" min="2020" max="2099" class="form-control"
+                               id="ano_referencia" name="ano_referencia" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="data_fechamento" class="form-label">Data de Fechamento</label>
+                        <input type="date" class="form-control" id="data_fechamento"
+                               name="data_fechamento" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="data_vencimento" class="form-label">Data de Vencimento</label>
+                        <input type="date" class="form-control" id="data_vencimento"
+                               name="data_vencimento" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Criar Fatura
+                </button>
+                <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - Gestão Financeira{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Relatórios e Análises</h1>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Filtros</h5>
+            </div>
+            <div class="card-body">
+                <form id="filtroForm">
+                    <div class="mb-3">
+                        <label for="mes" class="form-label">Mês</label>
+                        <select class="form-select" id="mes" name="mes">
+                            {% for i in range(1, 13) %}
+                                <option value="{{ i }}">{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ano" class="form-label">Ano</label>
+                        <input type="number" class="form-control" id="ano" name="ano" min="2020" max="2099">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="atualizarGraficos()">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Gastos por Categoria</h5>
+            </div>
+            <div class="card-body">
+                <div id="graficoCategorias"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Fluxo de Caixa Anual</h5>
+            </div>
+            <div class="card-body">
+                <div id="graficoFluxoCaixa"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Definir mês e ano atuais
+    const hoje = new Date();
+    document.getElementById('mes').value = hoje.getMonth() + 1;
+    document.getElementById('ano').value = hoje.getFullYear();
+
+    // Carregar gráficos ao carregar a página
+    window.addEventListener('load', function() {
+        atualizarGraficos();
+    });
+
+    function atualizarGraficos() {
+        carregarGraficoCategoria();
+        carregarGraficoFluxoCaixa();
+    }
+
+    function carregarGraficoCategoria() {
+        const mes = document.getElementById('mes').value;
+        const ano = document.getElementById('ano').value;
+
+        fetch(`/api/gastos-por-categoria?mes=${mes}&ano=${ano}`)
+            .then(response => response.json())
+            .then(data => {
+                const trace = {
+                    labels: data.categorias,
+                    values: data.valores,
+                    type: 'pie',
+                    marker: {
+                        colors: ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e']
+                    }
+                };
+
+                const layout = {
+                    title: `Despesas por Categoria - ${mes}/${ano}`,
+                    height: 400
+                };
+
+                Plotly.newPlot('graficoCategorias', [trace], layout);
+            })
+            .catch(error => console.error('Erro ao carregar gráfico:', error));
+    }
+
+    function carregarGraficoFluxoCaixa() {
+        const ano = document.getElementById('ano').value;
+
+        fetch(`/api/fluxo-caixa?ano=${ano}`)
+            .then(response => response.json())
+            .then(data => {
+                const traceReceitas = {
+                    x: data.meses,
+                    y: data.receitas,
+                    name: 'Receitas',
+                    type: 'bar',
+                    marker: { color: '#2ecc71' }
+                };
+
+                const traceDespesas = {
+                    x: data.meses,
+                    y: data.despesas,
+                    name: 'Despesas',
+                    type: 'bar',
+                    marker: { color: '#e74c3c' }
+                };
+
+                const layout = {
+                    title: `Fluxo de Caixa - ${ano}`,
+                    barmode: 'group',
+                    height: 400,
+                    yaxis: { title: 'Valor (R$)' }
+                };
+
+                Plotly.newPlot('graficoFluxoCaixa', [traceReceitas, traceDespesas], layout);
+            })
+            .catch(error => console.error('Erro ao carregar gráfico:', error));
+    }
+</script>
+{% endblock %}

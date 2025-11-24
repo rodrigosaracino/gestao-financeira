@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if cartao else 'Novo' }} Cartão - Gestão Financeira{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">{{ 'Editar' if cartao else 'Novo' }} Cartão de Crédito</h1>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="nome" class="form-label">Nome do Cartão</label>
+                <input type="text" class="form-control" id="nome" name="nome"
+                       value="{{ cartao.nome if cartao else '' }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="bandeira" class="form-label">Bandeira</label>
+                <select class="form-select" id="bandeira" name="bandeira" required>
+                    <option value="">Selecione...</option>
+                    <option value="Visa" {% if cartao and cartao.bandeira == 'Visa' %}selected{% endif %}>Visa</option>
+                    <option value="Mastercard" {% if cartao and cartao.bandeira == 'Mastercard' %}selected{% endif %}>Mastercard</option>
+                    <option value="Elo" {% if cartao and cartao.bandeira == 'Elo' %}selected{% endif %}>Elo</option>
+                    <option value="American Express" {% if cartao and cartao.bandeira == 'American Express' %}selected{% endif %}>American Express</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="limite" class="form-label">Limite</label>
+                <input type="number" step="0.01" class="form-control" id="limite"
+                       name="limite" value="{{ cartao.limite if cartao else '0.00' }}" required>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="dia_fechamento" class="form-label">Dia do Fechamento</label>
+                        <input type="number" min="1" max="31" class="form-control" id="dia_fechamento"
+                               name="dia_fechamento" value="{{ cartao.dia_fechamento if cartao else '' }}" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="dia_vencimento" class="form-label">Dia do Vencimento</label>
+                        <input type="number" min="1" max="31" class="form-control" id="dia_vencimento"
+                               name="dia_vencimento" value="{{ cartao.dia_vencimento if cartao else '' }}" required>
+                    </div>
+                </div>
+            </div>
+
+            {% if cartao %}
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="ativo" name="ativo"
+                       {% if cartao.ativo %}checked{% endif %}>
+                <label class="form-check-label" for="ativo">
+                    Cartão ativo
+                </label>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Salvar
+                </button>
+                <a href="{{ url_for('main.listar_cartoes') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

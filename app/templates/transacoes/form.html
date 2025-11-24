@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Transação - Gestão Financeira{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Nova Transação</h1>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="descricao" class="form-label">Descrição</label>
+                <input type="text" class="form-control" id="descricao" name="descricao" required>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="valor" class="form-label">Valor</label>
+                        <input type="number" step="0.01" class="form-control" id="valor"
+                               name="valor" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="data" class="form-label">Data</label>
+                        <input type="date" class="form-control" id="data" name="data" required value="{{ data_hoje }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="tipo" class="form-label">Tipo</label>
+                <select class="form-select" id="tipo" name="tipo" required>
+                    <option value="">Selecione...</option>
+                    <option value="receita">Receita</option>
+                    <option value="despesa">Despesa</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="forma_pagamento" class="form-label">Forma de Pagamento</label>
+                <select class="form-select" id="forma_pagamento" name="forma_pagamento" required>
+                    <option value="dinheiro">Dinheiro/Débito</option>
+                    <option value="cartao_credito">Cartão de Crédito</option>
+                </select>
+            </div>
+
+            <div class="mb-3" id="campo_conta">
+                <label for="conta_id" class="form-label">Conta</label>
+                <select class="form-select" id="conta_id" name="conta_id" required>
+                    <option value="">Selecione...</option>
+                    {% for conta in contas %}
+                        <option value="{{ conta.id }}">{{ conta.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3" id="campo_cartao" style="display: none;">
+                <label for="cartao_credito_id" class="form-label">Cartão de Crédito</label>
+                <select class="form-select" id="cartao_credito_id" name="cartao_credito_id">
+                    <option value="">Selecione...</option>
+                    {% for cartao in cartoes %}
+                        <option value="{{ cartao.id }}">{{ cartao.nome }} ({{ cartao.bandeira }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3" id="campo_parcelas" style="display: none;">
+                <label for="total_parcelas" class="form-label">Número de Parcelas</label>
+                <select class="form-select" id="total_parcelas" name="total_parcelas">
+                    <option value="1">À vista</option>
+                    {% for i in range(2, 13) %}
+                        <option value="{{ i }}">{{ i }}x</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="categoria_busca" class="form-label">Categoria</label>
+                <div class="position-relative">
+                    <input type="text" class="form-control" id="categoria_busca"
+                           placeholder="Digite para buscar ou criar nova categoria..."
+                           autocomplete="off">
+                    <input type="hidden" id="categoria_id" name="categoria_id">
+                    <div id="categoria_sugestoes" class="list-group position-absolute w-100" style="display: none; z-index: 1000; max-height: 200px; overflow-y: auto;">
+                    </div>
+                </div>
+                <div id="categoria_opcoes" class="mt-2" style="display: none;">
+                    <small class="text-muted">Categoria não encontrada.</small>
+                    <button type="button" class="btn btn-sm btn-success" id="btn_criar_categoria">
+                        <i class="bi bi-plus-circle"></i> Criar nova categoria
+                    </button>
+                </div>
+                <div id="categoria_erro" class="text-danger mt-1" style="display: none;">
+                    <small>Por favor, selecione uma categoria válida.</small>
+                </div>
+            </div>
+
+            <!-- Modal para criar categoria -->
+            <div class="modal fade" id="modalNovaCategoria" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Nova Categoria</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="nova_categoria_nome" class="form-label">Nome</label>
+                                <input type="text" class="form-control" id="nova_categoria_nome">
+                            </div>
+                            <div class="mb-3">
+                                <label for="nova_categoria_tipo" class="form-label">Tipo</label>
+                                <select class="form-select" id="nova_categoria_tipo">
+                                    <option value="">Selecione...</option>
+                                    <option value="receita">Receita</option>
+                                    <option value="despesa">Despesa</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="nova_categoria_cor" class="form-label">Cor</label>
+                                <input type="color" class="form-control form-control-color"
+                                       id="nova_categoria_cor" value="#3498db">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="btn_salvar_categoria">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Salvar
+                </button>
+                <a href="{{ url_for('main.listar_transacoes') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const categoriaBusca = document.getElementById('categoria_busca');
+    const categoriaId = document.getElementById('categoria_id');
+    const categoriaOpcoes = document.getElementById('categoria_opcoes');
+    const categoriaErro = document.getElementById('categoria_erro');
+    const btnCriarCategoria = document.getElementById('btn_criar_categoria');
+    const modalNovaCategoria = new bootstrap.Modal(document.getElementById('modalNovaCategoria'));
+    const btnSalvarCategoria = document.getElementById('btn_salvar_categoria');
+    const tipoTransacao = document.getElementById('tipo');
+
+    // Criar array de categorias para busca
+    let categorias = [];
+    {% for categoria in categorias %}
+    categorias.push({
+        id: {{ categoria.id }},
+        nome: "{{ categoria.nome }}",
+        tipo: "{{ categoria.tipo }}"
+    });
+    {% endfor %}
+
+    // Validar formulário antes de enviar
+    form.addEventListener('submit', function(e) {
+        console.log('Submit event triggered');
+        console.log('categoria_id value:', categoriaId.value);
+        console.log('categoria_busca value:', categoriaBusca.value);
+
+        categoriaErro.style.display = 'none';
+        categoriaBusca.classList.remove('is-invalid');
+
+        if (!categoriaId.value || categoriaId.value === '') {
+            console.log('Blocking submit - no category selected');
+            e.preventDefault();
+            e.stopPropagation();
+            categoriaErro.style.display = 'block';
+            categoriaBusca.classList.add('is-invalid');
+            categoriaBusca.focus();
+            return false;
+        }
+
+        console.log('Form validation passed, submitting...');
+        return true;
+    });
+
+    const categoriaSugestoes = document.getElementById('categoria_sugestoes');
+    const formaPagamento = document.getElementById('forma_pagamento');
+    const campoConta = document.getElementById('campo_conta');
+    const campoCartao = document.getElementById('campo_cartao');
+    const campoParcelas = document.getElementById('campo_parcelas');
+    const contaId = document.getElementById('conta_id');
+    const cartaoId = document.getElementById('cartao_credito_id');
+
+    // Alternar entre conta e cartão conforme forma de pagamento
+    formaPagamento.addEventListener('change', function() {
+        if (this.value === 'cartao_credito') {
+            campoConta.style.display = 'none';
+            campoCartao.style.display = 'block';
+            campoParcelas.style.display = 'block';
+            contaId.removeAttribute('required');
+            cartaoId.setAttribute('required', 'required');
+        } else {
+            campoConta.style.display = 'block';
+            campoCartao.style.display = 'none';
+            campoParcelas.style.display = 'none';
+            contaId.setAttribute('required', 'required');
+            cartaoId.removeAttribute('required');
+        }
+    });
+
+    // Filtrar categorias por tipo quando o tipo for alterado
+    tipoTransacao.addEventListener('change', function() {
+        categoriaBusca.value = '';
+        categoriaId.value = '';
+        categoriaSugestoes.style.display = 'none';
+        categoriaBusca.focus();
+    });
+
+    // Função para mostrar sugestões
+    function mostrarSugestoes(categoriasFiltradas) {
+        categoriaSugestoes.innerHTML = '';
+
+        if (categoriasFiltradas.length === 0) {
+            categoriaSugestoes.style.display = 'none';
+            return;
+        }
+
+        categoriasFiltradas.forEach(cat => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'list-group-item list-group-item-action';
+            item.textContent = cat.nome;
+            item.style.cursor = 'pointer';
+
+            // Badge para mostrar o tipo
+            const badge = document.createElement('span');
+            badge.className = cat.tipo === 'receita' ? 'badge bg-success float-end' : 'badge bg-danger float-end';
+            badge.textContent = cat.tipo === 'receita' ? 'Receita' : 'Despesa';
+            item.appendChild(badge);
+
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                categoriaBusca.value = cat.nome;
+                categoriaId.value = cat.id;
+                categoriaSugestoes.style.display = 'none';
+                categoriaOpcoes.style.display = 'none';
+                categoriaErro.style.display = 'none';
+                categoriaBusca.classList.remove('is-invalid');
+            });
+
+            categoriaSugestoes.appendChild(item);
+        });
+
+        categoriaSugestoes.style.display = 'block';
+    }
+
+    // Buscar categoria enquanto digita
+    categoriaBusca.addEventListener('input', function() {
+        const busca = this.value.trim().toLowerCase();
+        const tipoSelecionado = tipoTransacao.value;
+
+        if (busca === '') {
+            categoriaOpcoes.style.display = 'none';
+            categoriaId.value = '';
+            categoriaSugestoes.style.display = 'none';
+            return;
+        }
+
+        // Filtrar categorias por tipo e nome
+        const categoriasFiltradas = categorias.filter(cat => {
+            const matchNome = cat.nome.toLowerCase().includes(busca);
+            const matchTipo = !tipoSelecionado || cat.tipo === tipoSelecionado;
+            return matchNome && matchTipo;
+        });
+
+        // Verificar se há match exato
+        const matchExato = categoriasFiltradas.find(cat =>
+            cat.nome.toLowerCase() === busca
+        );
+
+        if (matchExato) {
+            categoriaId.value = matchExato.id;
+            categoriaOpcoes.style.display = 'none';
+            categoriaSugestoes.style.display = 'none';
+            categoriaErro.style.display = 'none';
+            categoriaBusca.classList.remove('is-invalid');
+        } else if (categoriasFiltradas.length === 0) {
+            categoriaId.value = '';
+            categoriaOpcoes.style.display = 'block';
+            categoriaSugestoes.style.display = 'none';
+        } else {
+            categoriaId.value = '';
+            categoriaOpcoes.style.display = 'none';
+            mostrarSugestoes(categoriasFiltradas);
+        }
+    });
+
+    // Autocompletar ao perder foco
+    categoriaBusca.addEventListener('blur', function() {
+        setTimeout(() => {
+            const busca = this.value.trim().toLowerCase();
+            const tipoSelecionado = tipoTransacao.value;
+
+            if (busca) {
+                const categoriasFiltradas = categorias.filter(cat => {
+                    const matchNome = cat.nome.toLowerCase().includes(busca);
+                    const matchTipo = !tipoSelecionado || cat.tipo === tipoSelecionado;
+                    return matchNome && matchTipo;
+                });
+
+                if (categoriasFiltradas.length === 1) {
+                    categoriaBusca.value = categoriasFiltradas[0].nome;
+                    categoriaId.value = categoriasFiltradas[0].id;
+                    categoriaOpcoes.style.display = 'none';
+                    categoriaErro.style.display = 'none';
+                    categoriaBusca.classList.remove('is-invalid');
+                }
+            }
+
+            // Esconder sugestões ao perder foco
+            categoriaSugestoes.style.display = 'none';
+        }, 200);
+    });
+
+    // Focar no campo ao clicar nas sugestões
+    categoriaBusca.addEventListener('focus', function() {
+        if (this.value.trim() !== '' && categoriaId.value === '') {
+            // Re-mostrar sugestões se houver texto mas nenhuma categoria selecionada
+            const busca = this.value.trim().toLowerCase();
+            const tipoSelecionado = tipoTransacao.value;
+
+            const categoriasFiltradas = categorias.filter(cat => {
+                const matchNome = cat.nome.toLowerCase().includes(busca);
+                const matchTipo = !tipoSelecionado || cat.tipo === tipoSelecionado;
+                return matchNome && matchTipo;
+            });
+
+            if (categoriasFiltradas.length > 0) {
+                mostrarSugestoes(categoriasFiltradas);
+            }
+        }
+    });
+
+    // Criar nova categoria
+    btnCriarCategoria.addEventListener('click', function() {
+        const nomeBusca = categoriaBusca.value.trim();
+        document.getElementById('nova_categoria_nome').value = nomeBusca;
+
+        // Pre-selecionar o tipo se já estiver escolhido
+        const tipoSelecionado = tipoTransacao.value;
+        if (tipoSelecionado) {
+            document.getElementById('nova_categoria_tipo').value = tipoSelecionado;
+        }
+
+        modalNovaCategoria.show();
+    });
+
+    // Salvar nova categoria
+    btnSalvarCategoria.addEventListener('click', async function() {
+        const nome = document.getElementById('nova_categoria_nome').value.trim();
+        const tipo = document.getElementById('nova_categoria_tipo').value;
+        const cor = document.getElementById('nova_categoria_cor').value;
+
+        if (!nome || !tipo) {
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/categorias', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ nome, tipo, cor })
+            });
+
+            if (response.ok) {
+                const novaCategoria = await response.json();
+
+                // Adicionar à lista de categorias
+                categorias.push({
+                    id: novaCategoria.id,
+                    nome: novaCategoria.nome,
+                    tipo: novaCategoria.tipo
+                });
+
+                // Atualizar o campo
+                categoriaBusca.value = novaCategoria.nome;
+                categoriaId.value = novaCategoria.id;
+                categoriaOpcoes.style.display = 'none';
+                categoriaErro.style.display = 'none';
+                categoriaBusca.classList.remove('is-invalid');
+                categoriaSugestoes.style.display = 'none';
+
+                // Fechar modal
+                modalNovaCategoria.hide();
+
+                // Limpar form
+                document.getElementById('nova_categoria_nome').value = '';
+                document.getElementById('nova_categoria_tipo').value = '';
+                document.getElementById('nova_categoria_cor').value = '#3498db';
+            } else {
+                const error = await response.json();
+                alert('Erro ao criar categoria: ' + (error.erro || 'Erro desconhecido'));
+            }
+        } catch (error) {
+            alert('Erro ao criar categoria: ' + error.message);
+        }
+    });
+});
+</script>
+
+{% endblock %}
