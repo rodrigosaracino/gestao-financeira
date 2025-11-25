@@ -791,10 +791,11 @@ def gerar_transacoes_recorrentes(transacao_base, frequencia, data_inicio, quanti
         raise ValueError(f'Frequência inválida: {frequencia}')
 
     intervalo = intervalos[frequencia]
-    data_atual = data_inicio
+    # Começar da segunda ocorrência, pois a primeira já é a transacao_base
+    data_atual = data_inicio + intervalo
 
-    # Gerar a quantidade especificada de transações
-    for i in range(quantidade):
+    # Gerar a quantidade especificada de transações (menos 1, pois a primeira já existe)
+    for i in range(quantidade - 1):
         # Determinar se esta transação específica deve ser marcada como paga
         # Apenas transações passadas devem ser marcadas como pagas
         transacao_paga = pago_inicial and data_atual <= date.today()
