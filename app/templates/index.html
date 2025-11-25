@@ -3,74 +3,239 @@
 {% block title %}Dashboard - Gestão Financeira{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Dashboard Financeiro</h1>
+<!-- Header Section -->
+<div class="d-flex justify-content-between align-items-center mb-4" style="margin-top: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">Projeção de Fluxo de Caixa</h1>
+        <p class="text-muted" style="margin: 0; font-size: 0.95rem;">Acompanhe sua saúde financeira em tempo real</p>
+    </div>
+    <form method="GET" class="d-flex gap-2">
+        <select name="mes" class="form-select form-select-sm" style="width: 140px;" onchange="this.form.submit()">
+            {% for i in range(1, 13) %}
+                <option value="{{ i }}" {% if i == mes_filtro %}selected{% endif %}>
+                    {{ ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][i-1] }}
+                </option>
+            {% endfor %}
+        </select>
+        <select name="ano" class="form-select form-select-sm" style="width: 100px;" onchange="this.form.submit()">
+            {% for ano in range(2020, 2030) %}
+                <option value="{{ ano }}" {% if ano == ano_filtro %}selected{% endif %}>{{ ano }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
 
+<!-- KPI Summary Cards -->
 <div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-wallet"></i> Saldo Total</h5>
-                <h2>R$ {{ "%.2f"|format(saldo_total) }}</h2>
-            </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card metric-blue">
+            <h5 class="card-title">
+                <i class="bi bi-wallet"></i> Saldo Atual
+            </h5>
+            <div class="metric-value">R$ {{ "%.2f"|format(saldo_total) }}</div>
+            <div class="metric-label">Todas as contas</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-success">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-arrow-down-circle"></i> Receitas do Mês</h5>
-                <h2>R$ {{ "%.2f"|format(receitas_mes) }}</h2>
-            </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card metric-green">
+            <h5 class="card-title">
+                <i class="bi bi-arrow-down-circle"></i> Receitas
+            </h5>
+            <div class="metric-value">R$ {{ "%.2f"|format(receitas_mes) }}</div>
+            <div class="metric-label">Total do mês</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-danger">
-            <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-arrow-up-circle"></i> Despesas do Mês</h5>
-                <h2>R$ {{ "%.2f"|format(despesas_mes) }}</h2>
-            </div>
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card metric-red">
+            <h5 class="card-title">
+                <i class="bi bi-arrow-up-circle"></i> Despesas
+            </h5>
+            <div class="metric-value">R$ {{ "%.2f"|format(despesas_mes) }}</div>
+            <div class="metric-label">Total do mês</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-warning">
+    <div class="col-md-3 mb-3">
+        <div class="card metric-card metric-orange">
+            <h5 class="card-title">
+                <i class="bi bi-graph-up-arrow"></i> Saldo Previsto
+            </h5>
+            <div class="metric-value">R$ {{ "%.2f"|format(saldo_previsto) }}</div>
+            <div class="metric-label">Fim do mês</div>
+        </div>
+    </div>
+</div>
+
+<!-- Cash Flow Chart -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-graph-up"></i> Projeção de Fluxo de Caixa - {{ mes_filtro }}/{{ ano_filtro }}</h5>
+            </div>
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-credit-card"></i> Faturas Abertas</h5>
-                <h2>R$ {{ "%.2f"|format(total_faturas) }}</h2>
+                <div id="fluxoCaixaChart" style="width: 100%; height: 450px;"></div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Quick Lists Section -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <!-- Upcoming Payments -->
+    <div class="col-md-6 mb-4">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-bank"></i> Minhas Contas</h5>
+                <h5><i class="bi bi-calendar-x"></i> Próximos Pagamentos</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for pagamento in proximos_pagamentos %}
+                        <div class="list-group-item d-flex justify-content-between align-items-start">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                    {% if pagamento.tipo == 'fatura' %}
+                                        <i class="bi bi-credit-card" style="color: var(--color-accent-purple);"></i>
+                                    {% else %}
+                                        <i class="bi bi-cash-stack" style="color: var(--color-accent-red);"></i>
+                                    {% endif %}
+                                    <strong style="font-size: 1rem; color: var(--color-text-primary);">
+                                        {{ pagamento.descricao }}
+                                    </strong>
+                                </div>
+                                <small class="text-muted" style="display: block; margin-left: 1.75rem;">
+                                    {{ pagamento.categoria }} • {{ pagamento.data.strftime('%d/%m/%Y') }}
+                                </small>
+                            </div>
+                            <div style="text-align: right; margin-left: 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+                                <span class="financial-value negative" style="font-size: 1.1rem; white-space: nowrap;">
+                                    R$ {{ "%.2f"|format(pagamento.valor) }}
+                                </span>
+                                {% if pagamento.tipo == 'fatura' %}
+                                    <a href="{{ url_for('main.ver_fatura', id=pagamento.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> Ver Fatura
+                                    </a>
+                                {% else %}
+                                    {% if not pagamento.pago %}
+                                        <button class="btn btn-sm btn-success btn-marcar-pago"
+                                                data-id="{{ pagamento.id }}"
+                                                data-tipo="despesa">
+                                            <i class="bi bi-check-circle"></i> Marcar como Pago
+                                        </button>
+                                    {% else %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle-fill"></i> Pago
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-check-circle-fill" style="font-size: 3rem; color: var(--color-accent-green); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Nenhum pagamento previsto</p>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% if proximos_pagamentos|length > 0 %}
+                <a href="{{ url_for('main.listar_transacoes') }}" class="btn btn-outline w-100 mt-3">
+                    <i class="bi bi-eye"></i> Ver Todas as Transações
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Revenues -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-calendar-check"></i> Próximas Receitas</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for receita in proximas_receitas %}
+                        <div class="list-group-item d-flex justify-content-between align-items-start">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                    <i class="bi bi-arrow-down-circle-fill" style="color: var(--color-accent-green);"></i>
+                                    <strong style="font-size: 1rem; color: var(--color-text-primary);">
+                                        {{ receita.descricao }}
+                                    </strong>
+                                </div>
+                                <small class="text-muted" style="display: block; margin-left: 1.75rem;">
+                                    {{ receita.categoria }} • {{ receita.data.strftime('%d/%m/%Y') }}
+                                </small>
+                            </div>
+                            <div style="text-align: right; margin-left: 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
+                                <span class="financial-value positive" style="font-size: 1.1rem; white-space: nowrap;">
+                                    R$ {{ "%.2f"|format(receita.valor) }}
+                                </span>
+                                {% if not receita.pago %}
+                                    <button class="btn btn-sm btn-success btn-marcar-pago"
+                                            data-id="{{ receita.id }}"
+                                            data-tipo="receita">
+                                        <i class="bi bi-check-circle"></i> Marcar como Recebido
+                                    </button>
+                                {% else %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle-fill"></i> Recebido
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: var(--color-text-tertiary); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Nenhuma receita prevista</p>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% if proximas_receitas|length > 0 %}
+                <a href="{{ url_for('main.listar_transacoes') }}" class="btn btn-outline w-100 mt-3">
+                    <i class="bi bi-eye"></i> Ver Todas as Transações
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bank Accounts Section -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-bank"></i> Contas Bancárias</h5>
             </div>
             <div class="card-body">
                 <div class="list-group">
                     {% for conta in contas %}
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>{{ conta.nome }}</strong>
+                                <strong style="font-size: 1rem; color: var(--color-text-primary);">{{ conta.nome }}</strong>
                                 <br>
-                                <small class="text-muted">{{ conta.tipo|capitalize }}</small>
+                                <small class="text-muted" style="text-transform: capitalize;">{{ conta.tipo }}</small>
                             </div>
-                            <span class="badge bg-primary rounded-pill">
+                            <span class="badge bg-primary">
                                 R$ {{ "%.2f"|format(conta.saldo_atual) }}
                             </span>
                         </div>
                     {% else %}
-                        <p class="text-muted">Nenhuma conta cadastrada.</p>
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: var(--color-text-tertiary); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Nenhuma conta cadastrada</p>
+                        </div>
                     {% endfor %}
                 </div>
-                <a href="{{ url_for('main.nova_conta') }}" class="btn btn-primary mt-3">
+                <a href="{{ url_for('main.nova_conta') }}" class="btn btn-primary mt-3 w-100">
                     <i class="bi bi-plus-circle"></i> Nova Conta
                 </a>
             </div>
         </div>
     </div>
 
-    <div class="col-md-6">
+    <!-- Pending Invoices -->
+    <div class="col-md-6 mb-4">
         <div class="card">
             <div class="card-header">
                 <h5><i class="bi bi-receipt"></i> Faturas Pendentes</h5>
@@ -81,50 +246,364 @@
                         <a href="{{ url_for('main.ver_fatura', id=fatura.id) }}"
                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>{{ fatura.cartao.nome }}</strong>
+                                <strong style="font-size: 1rem; color: var(--color-text-primary);">{{ fatura.cartao.nome }}</strong>
                                 <br>
                                 <small class="text-muted">
                                     {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }} -
                                     Venc: {{ fatura.data_vencimento.strftime('%d/%m/%Y') }}
                                 </small>
                             </div>
-                            <span class="badge bg-warning rounded-pill">
+                            <span class="badge bg-warning">
                                 R$ {{ "%.2f"|format(fatura.valor_total) }}
                             </span>
                         </a>
                     {% else %}
-                        <p class="text-muted">Nenhuma fatura pendente.</p>
+                        <div class="text-center py-4">
+                            <i class="bi bi-check-circle" style="font-size: 3rem; color: var(--color-accent-green); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Nenhuma fatura pendente</p>
+                        </div>
                     {% endfor %}
                 </div>
-                <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-primary mt-3">
-                    <i class="bi bi-eye"></i> Ver Todas
+                <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-primary mt-3 w-100">
+                    <i class="bi bi-eye"></i> Ver Todas as Faturas
                 </a>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Quick Actions Section -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-plus-circle"></i> Ações Rápidas</h5>
+                <h5><i class="bi bi-lightning-charge"></i> Ações Rápidas</h5>
             </div>
             <div class="card-body">
-                <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-success me-2">
-                    <i class="bi bi-cash-coin"></i> Nova Transação
-                </a>
-                <a href="{{ url_for('main.novo_cartao') }}" class="btn btn-info me-2">
-                    <i class="bi bi-credit-card"></i> Novo Cartão
-                </a>
-                <a href="{{ url_for('main.nova_fatura') }}" class="btn btn-warning me-2">
-                    <i class="bi bi-receipt"></i> Nova Fatura
-                </a>
-                <a href="{{ url_for('main.relatorios') }}" class="btn btn-primary">
-                    <i class="bi bi-graph-up"></i> Ver Relatórios
-                </a>
+                <div class="row g-3">
+                    <div class="col-md-3 col-sm-6">
+                        <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-success w-100" style="padding: 1rem;">
+                            <i class="bi bi-cash-coin" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                            <span style="font-size: 0.9rem;">Nova Transação</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <a href="{{ url_for('main.novo_cartao') }}" class="btn btn-info w-100" style="padding: 1rem;">
+                            <i class="bi bi-credit-card" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                            <span style="font-size: 0.9rem;">Novo Cartão</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <a href="{{ url_for('main.nova_fatura') }}" class="btn btn-warning w-100" style="padding: 1rem;">
+                            <i class="bi bi-receipt" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                            <span style="font-size: 0.9rem;">Nova Fatura</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <a href="{{ url_for('main.relatorios') }}" class="btn btn-primary w-100" style="padding: 1rem;">
+                            <i class="bi bi-graph-up" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+                            <span style="font-size: 0.9rem;">Ver Relatórios</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+/* Page-specific enhancements */
+.metric-card {
+    cursor: default;
+}
+
+.list-group-item strong {
+    font-weight: 600;
+}
+
+/* Empty state icons */
+.bi-inbox,
+.bi-check-circle {
+    opacity: 0.3;
+}
+
+/* Payment/Revenue items */
+.list-group-item {
+    padding: var(--space-md);
+}
+
+.list-group-item i {
+    flex-shrink: 0;
+}
+</style>
+
+<script>
+// Função para marcar transação como paga/recebida
+document.addEventListener('DOMContentLoaded', function() {
+    // Adicionar evento aos botões de marcar como pago
+    document.querySelectorAll('.btn-marcar-pago').forEach(button => {
+        button.addEventListener('click', async function() {
+            const transacaoId = this.dataset.id;
+            const tipo = this.dataset.tipo;
+            const botao = this;
+
+            // Confirmar ação
+            const textoConfirmacao = tipo === 'receita'
+                ? 'Deseja marcar esta receita como recebida?'
+                : 'Deseja marcar esta despesa como paga?';
+
+            if (!confirm(textoConfirmacao)) {
+                return;
+            }
+
+            // Desabilitar botão durante o processamento
+            botao.disabled = true;
+            botao.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+
+            try {
+                const response = await fetch(`/transacoes/${transacaoId}/toggle-pago`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Recarregar a página para atualizar os dados
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.message);
+                    botao.disabled = false;
+                    const textoOriginal = tipo === 'receita'
+                        ? '<i class="bi bi-check-circle"></i> Marcar como Recebido'
+                        : '<i class="bi bi-check-circle"></i> Marcar como Pago';
+                    botao.innerHTML = textoOriginal;
+                }
+            } catch (error) {
+                alert('Erro ao processar transação: ' + error.message);
+                botao.disabled = false;
+                const textoOriginal = tipo === 'receita'
+                    ? '<i class="bi bi-check-circle"></i> Marcar como Recebido'
+                    : '<i class="bi bi-check-circle"></i> Marcar como Pago';
+                botao.innerHTML = textoOriginal;
+            }
+        });
+    });
+});
+
+// Aguardar carregamento completo da página e do Plotly
+document.addEventListener('DOMContentLoaded', function() {
+    // Preparar dados para o gráfico
+    var projecaoData = {{ projecao_fluxo | tojson }};
+
+    console.log('Dados de projeção:', projecaoData); // Debug
+
+    // Verificar se Plotly está disponível
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly não está carregado. Tentando novamente...');
+        // Aguardar um pouco mais e tentar novamente
+        setTimeout(initChart, 500);
+        return;
+    }
+
+    initChart();
+
+    function initChart() {
+        // Verificar novamente se Plotly está disponível
+        if (typeof Plotly === 'undefined') {
+            console.error('Plotly ainda não está disponível');
+            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro: Biblioteca de gráficos não carregada. Recarregue a página.</div>';
+            return;
+        }
+
+        // Verificar se há dados
+        if (!projecaoData || projecaoData.length === 0) {
+            console.error('Nenhum dado de projeção disponível');
+            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #8b98a5;">Nenhum dado disponível para exibir o gráfico</div>';
+            return;
+        }
+    // Separar dados em passado e futuro
+    var diasPassado = [];
+    var saldosPassado = [];
+    var diasFuturo = [];
+    var saldosFuturo = [];
+
+    var hoje = new Date().toISOString().split('T')[0];
+
+    projecaoData.forEach(function(item) {
+        if (item.is_futuro) {
+            diasFuturo.push(item.dia);
+            saldosFuturo.push(item.saldo);
+        } else {
+            diasPassado.push(item.dia);
+            saldosPassado.push(item.saldo);
+        }
+    });
+
+    // Adicionar o último ponto do passado ao futuro para conectar as linhas
+    if (diasPassado.length > 0 && diasFuturo.length > 0) {
+        diasFuturo.unshift(diasPassado[diasPassado.length - 1]);
+        saldosFuturo.unshift(saldosPassado[saldosPassado.length - 1]);
+    }
+
+    // Se não há dados de passado, usar todos os dados como futuro
+    if (diasPassado.length === 0 && projecaoData.length > 0) {
+        projecaoData.forEach(function(item) {
+            diasFuturo.push(item.dia);
+            saldosFuturo.push(item.saldo);
+        });
+    }
+
+    // Se não há dados de futuro, usar todos os dados como passado
+    if (diasFuturo.length === 0 && projecaoData.length > 0 && diasPassado.length === 0) {
+        projecaoData.forEach(function(item) {
+            diasPassado.push(item.dia);
+            saldosPassado.push(item.saldo);
+        });
+    }
+
+    // Preparar traces
+    var data = [];
+
+    // Linha de referência no zero (apenas se há dados)
+    if (diasPassado.length > 0 || diasFuturo.length > 0) {
+        var primeiroDia = diasPassado.length > 0 ? diasPassado[0] : diasFuturo[0];
+        var ultimoDia = diasFuturo.length > 0 ? diasFuturo[diasFuturo.length - 1] : diasPassado[diasPassado.length - 1];
+
+        var traceZero = {
+            x: [primeiroDia, ultimoDia],
+            y: [0, 0],
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Saldo Zero',
+            line: {
+                color: '#ff3b57',
+                width: 1,
+                dash: 'dash'
+            },
+            hoverinfo: 'skip',
+            showlegend: false
+        };
+        data.push(traceZero);
+    }
+
+    // Trace do passado (saldo realizado)
+    if (diasPassado.length > 0) {
+        var tracePassado = {
+            x: diasPassado,
+            y: saldosPassado,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Saldo Realizado',
+            line: {
+                color: '#0066ff',
+                width: 3
+            },
+            marker: {
+                color: '#0066ff',
+                size: 6
+            },
+            hovertemplate: '<b>Dia %{x}</b><br>Saldo: R$ %{y:.2f}<extra></extra>'
+        };
+        data.push(tracePassado);
+    }
+
+    // Trace do futuro (projeção)
+    if (diasFuturo.length > 0) {
+        var traceFuturo = {
+            x: diasFuturo,
+            y: saldosFuturo,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'Projeção',
+            line: {
+                color: '#8b98a5',
+                width: 2,
+                dash: 'dot'
+            },
+            marker: {
+                color: '#8b98a5',
+                size: 5,
+                opacity: 0.7
+            },
+            hovertemplate: '<b>Dia %{x}</b><br>Projeção: R$ %{y:.2f}<extra></extra>'
+        };
+        data.push(traceFuturo);
+    }
+
+    var layout = {
+        font: {
+            family: 'Inter, sans-serif',
+            size: 12,
+            color: '#0f1419'
+        },
+        hovermode: 'x unified',
+        xaxis: {
+            title: {
+                text: 'Dia do Mês',
+                font: {
+                    size: 13,
+                    weight: 600
+                }
+            },
+            showgrid: true,
+            gridcolor: 'rgba(0, 0, 0, 0.06)',
+            zeroline: false
+        },
+        yaxis: {
+            title: {
+                text: 'Saldo (R$)',
+                font: {
+                    size: 13,
+                    weight: 600
+                }
+            },
+            showgrid: true,
+            gridcolor: 'rgba(0, 0, 0, 0.06)',
+            zeroline: true,
+            zerolinecolor: '#ff3b57',
+            zerolinewidth: 1
+        },
+        plot_bgcolor: 'rgba(255, 255, 255, 0.5)',
+        paper_bgcolor: 'transparent',
+        margin: {
+            l: 60,
+            r: 30,
+            t: 30,
+            b: 50
+        },
+        legend: {
+            orientation: 'h',
+            yanchor: 'bottom',
+            y: 1.02,
+            xanchor: 'right',
+            x: 1,
+            bgcolor: 'rgba(255, 255, 255, 0.8)',
+            bordercolor: 'rgba(0, 0, 0, 0.1)',
+            borderwidth: 1
+        }
+    };
+
+    var config = {
+        responsive: true,
+        displayModeBar: false
+    };
+
+        try {
+            Plotly.newPlot('fluxoCaixaChart', data, layout, config);
+            console.log('Gráfico criado com sucesso');
+
+            // Redimensionar gráfico quando a janela mudar de tamanho
+            window.addEventListener('resize', function() {
+                Plotly.Plots.resize('fluxoCaixaChart');
+            });
+        } catch (error) {
+            console.error('Erro ao criar gráfico:', error);
+            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro ao criar gráfico: ' + error.message + '</div>';
+        }
+    }
+});
+</script>
 {% endblock %}

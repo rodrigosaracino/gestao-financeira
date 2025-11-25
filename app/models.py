@@ -1,7 +1,37 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
+
+
+class User(UserMixin, db.Model):
+    """Modelo para usuários do sistema"""
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    senha_hash = db.Column(db.String(255), nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    ativo = db.Column(db.Boolean, default=True)
+
+    # Relacionamentos
+    contas = db.relationship('Conta', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    categorias = db.relationship('Categoria', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    cartoes = db.relationship('CartaoCredito', backref='usuario', lazy=True, cascade='all, delete-orphan')
+
+    def set_password(self, password):
+        """Define a senha do usuário (criptografada)"""
+        self.senha_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Verifica se a senha está correta"""
+        return check_password_hash(self.senha_hash, password)
+
+    def __repr__(self):
+        return f'<User {self.email}>'
 
 class Conta(db.Model):
     """Modelo para contas bancárias"""
@@ -14,6 +44,7 @@ class Conta(db.Model):
     saldo_atual = db.Column(db.Numeric(10, 2), default=0.00)
     ativa = db.Column(db.Boolean, default=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     transacoes = db.relationship('Transacao', backref='conta', lazy=True)
 
@@ -26,11 +57,16 @@ class Categoria(db.Model):
     __tablename__ = 'categorias'
 
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
+    nome = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # receita, despesa
     cor = db.Column(db.String(7))  # código hexadecimal da cor
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     transacoes = db.relationship('Transacao', backref='categoria', lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('nome', 'user_id', name='unique_categoria_per_user'),
+    )
 
     def __repr__(self):
         return f'<Categoria {self.nome}>'
@@ -50,6 +86,7 @@ class Transacao(db.Model):
     # Campos para pagamento
     forma_pagamento = db.Column(db.String(20), default='dinheiro')  # dinheiro, cartao_credito
     cartao_credito_id = db.Column(db.Integer, db.ForeignKey('cartoes_credito.id'), nullable=True)
+    pago = db.Column(db.Boolean, default=False)  # Se foi pago (despesa) ou recebido (receita)
 
     # Campos para parcelamento
     parcelado = db.Column(db.Boolean, default=False)
@@ -57,9 +94,22 @@ class Transacao(db.Model):
     total_parcelas = db.Column(db.Integer, nullable=True)  # Ex: 12 (total de parcelas)
     transacao_pai_id = db.Column(db.Integer, nullable=True)  # ID da transação original (para parcelas)
 
+    # Campos para recorrência
+    recorrente = db.Column(db.Boolean, default=False)
+    frequencia_recorrencia = db.Column(db.String(20), nullable=True)  # mensal, semanal, quinzenal, anual
+    data_inicio_recorrencia = db.Column(db.Date, nullable=True)
+    data_fim_recorrencia = db.Column(db.Date, nullable=True)  # Mantido para compatibilidade
+    quantidade_recorrencias = db.Column(db.Integer, nullable=True)  # Número de vezes que deve ocorrer
+    transacao_recorrente_pai_id = db.Column(db.Integer, nullable=True)  # ID da transação recorrente original
+
     conta_id = db.Column(db.Integer, db.ForeignKey('contas.id'), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=False)
     fatura_id = db.Column(db.Integer, db.ForeignKey('faturas.id'), nullable=True)
+
+    def pode_marcar_pago(self):
+        """Verifica se a transação pode ser marcada como paga"""
+        # Transações de cartão de crédito não podem ser marcadas individualmente
+        return self.forma_pagamento != 'cartao_credito'
 
     def __repr__(self):
         return f'<Transacao {self.descricao} - R$ {self.valor}>'
@@ -73,12 +123,24 @@ class CartaoCredito(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     bandeira = db.Column(db.String(50))  # Visa, Mastercard, etc
     limite = db.Column(db.Numeric(10, 2), nullable=False)
+    limite_utilizado = db.Column(db.Numeric(10, 2), default=0.00)
     dia_fechamento = db.Column(db.Integer, nullable=False)  # 1-31
     dia_vencimento = db.Column(db.Integer, nullable=False)  # 1-31
     ativo = db.Column(db.Boolean, default=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     faturas = db.relationship('Fatura', backref='cartao', lazy=True)
+
+    def limite_disponivel(self):
+        """Calcula o limite disponível"""
+        return self.limite - self.limite_utilizado
+
+    def percentual_utilizado(self):
+        """Calcula o percentual do limite utilizado"""
+        if self.limite > 0:
+            return (self.limite_utilizado / self.limite) * 100
+        return 0
 
     def __repr__(self):
         return f'<CartaoCredito {self.nome}>'

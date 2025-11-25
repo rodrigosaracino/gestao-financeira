@@ -1,260 +1,175 @@
-# Sistema de Gestão Financeira Pessoal
+# Sistema de Gestão Financeira
 
-Sistema completo de gestão financeira pessoal desenvolvido em Python/Flask com funcionalidades de:
-- Fluxo de caixa
-- Gestão de contas bancárias
-- Controle de cartões de crédito
-- Gestão de faturas
-- Categorização de gastos
-- Relatórios e gráficos interativos
+Sistema completo de gestão financeira pessoal desenvolvido com Flask, PostgreSQL e Bootstrap 5.
 
 ## Funcionalidades
 
-### Contas Bancárias
-- Cadastro de múltiplas contas (corrente, poupança, investimento)
-- Controle de saldo inicial e atual
-- Ativação/desativação de contas
+- **Autenticação de Usuários**: Sistema completo de registro e login com isolamento de dados por usuário
+- **Gestão de Contas Bancárias**: Controle de contas correntes, poupança e outras
+- **Transações Financeiras**: Registro de receitas e despesas com categorização
+- **Transações Recorrentes**: Criação automática de transações recorrentes (semanal, mensal, etc.)
+- **Cartões de Crédito**: Gestão completa de cartões com controle de limite
+- **Compras Parceladas**: Parcelamento automático com geração de faturas mensais
+- **Faturas de Cartão**: Controle detalhado de faturas com data de vencimento
+- **Categorias Personalizadas**: Criação de categorias por usuário com cores customizadas
+- **Dashboard Interativo**: Visão geral com gráficos e projeção de fluxo de caixa
+- **Relatórios**: Gráficos de gastos por categoria e fluxo de caixa anual
 
-### Transações
-- Registro de receitas e despesas
-- Categorização de transações
-- Histórico completo com paginação
-- Atualização automática de saldos
+## Tecnologias Utilizadas
 
-### Cartões de Crédito
-- Cadastro de cartões com limite
-- Configuração de dias de fechamento e vencimento
-- Suporte para múltiplas bandeiras
-
-### Faturas
-- Criação e gerenciamento de faturas
-- Status automático (aberta, fechada, paga, vencida)
-- Vinculação de transações a faturas
-- Pagamento de faturas com débito em conta
-
-### Relatórios
-- Gráfico de gastos por categoria (pizza)
-- Gráfico de fluxo de caixa mensal (barras)
-- Filtros por mês e ano
-- Visualizações interativas com Plotly
+- **Backend**: Python 3.11, Flask
+- **Banco de Dados**: PostgreSQL 15
+- **ORM**: SQLAlchemy com Flask-Migrate
+- **Autenticação**: Flask-Login
+- **Frontend**: Bootstrap 5, Plotly.js para gráficos
+- **Containerização**: Docker e Docker Compose
 
 ## Requisitos
 
-- Python 3.8+
-- PostgreSQL 12+
-- pip (gerenciador de pacotes Python)
+- Docker e Docker Compose (recomendado)
+- OU Python 3.11+ e PostgreSQL 15+
 
-## Instalação
+## Instalação e Execução
 
-### 1. Clone ou baixe o projeto
+### Opção 1: Usando Docker (Recomendado)
 
+1. Clone o repositório:
 ```bash
+git clone <repository-url>
 cd gestao_financeira_app
 ```
 
-### 2. Crie um ambiente virtual
+2. Inicie os containers:
+```bash
+docker-compose up -d
+```
 
+3. Acesse a aplicação em: http://localhost:5000
+
+### Opção 2: Instalação Local
+
+1. Clone o repositório:
+```bash
+git clone <repository-url>
+cd gestao_financeira_app
+```
+
+2. Crie e ative um ambiente virtual:
 ```bash
 python3 -m venv venv
 source venv/bin/activate  # No Windows: venv\Scripts\activate
 ```
 
-### 3. Instale as dependências
-
+3. Instale as dependências:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure o PostgreSQL
-
-Crie um banco de dados PostgreSQL:
-
+4. Configure as variáveis de ambiente:
 ```bash
-# Entre no PostgreSQL
-psql -U postgres
-
-# Crie o banco de dados
-CREATE DATABASE gestao_financeira;
-
-# Crie um usuário (opcional)
-CREATE USER seu_usuario WITH PASSWORD 'sua_senha';
-GRANT ALL PRIVILEGES ON DATABASE gestao_financeira TO seu_usuario;
+export DATABASE_URL="postgresql://usuario:senha@localhost:5432/gestao_financeira"
+export SECRET_KEY="sua-chave-secreta-aqui"
 ```
 
-### 5. Configure as variáveis de ambiente
-
-Copie o arquivo de exemplo e edite com suas configurações:
-
+5. Execute as migrações:
 ```bash
-cp .env.example .env
-```
-
-Edite o arquivo `.env`:
-
-```
-DATABASE_URL=postgresql://seu_usuario:sua_senha@localhost:5432/gestao_financeira
-SECRET_KEY=sua-chave-secreta-muito-segura-aqui
-FLASK_APP=run.py
-FLASK_ENV=development
-```
-
-### 6. Inicialize o banco de dados
-
-```bash
-# Inicializar migrações
-flask db init
-
-# Criar migração
-flask db migrate -m "Initial migration"
-
-# Aplicar migração
 flask db upgrade
 ```
 
-### 7. (Opcional) Adicione dados iniciais
-
-Você pode criar categorias padrão executando Python:
-
+6. Inicie a aplicação:
 ```bash
-python3
+python run.py
 ```
 
-```python
-from app import create_app
-from app.models import db, Categoria
+7. Acesse a aplicação em: http://localhost:8000
 
-app = create_app()
-with app.app_context():
-    categorias = [
-        Categoria(nome='Alimentação', tipo='despesa', cor='#e74c3c'),
-        Categoria(nome='Transporte', tipo='despesa', cor='#3498db'),
-        Categoria(nome='Moradia', tipo='despesa', cor='#2ecc71'),
-        Categoria(nome='Lazer', tipo='despesa', cor='#f39c12'),
-        Categoria(nome='Saúde', tipo='despesa', cor='#9b59b6'),
-        Categoria(nome='Educação', tipo='despesa', cor='#1abc9c'),
-        Categoria(nome='Salário', tipo='receita', cor='#27ae60'),
-        Categoria(nome='Investimentos', tipo='receita', cor='#16a085'),
-    ]
-    db.session.add_all(categorias)
-    db.session.commit()
-    print("Categorias criadas com sucesso!")
-```
+## Configuração
 
-## Como Executar
+### Variáveis de Ambiente
 
-### Desenvolvimento
+- `DATABASE_URL`: URL de conexão com o PostgreSQL
+- `SECRET_KEY`: Chave secreta para sessões Flask
+- `FLASK_ENV`: Ambiente de execução (development/production)
 
-```bash
-python3 run.py
-```
+### Primeiro Acesso
 
-O aplicativo estará disponível em: `http://localhost:5000`
+Ao executar pela primeira vez, você pode criar um novo usuário através da tela de registro em `/registro`.
 
-### Produção
+Alternativamente, existe um usuário padrão criado pela migração:
+- Email: admin@admin.com
+- Senha: 123456
 
-Para produção, use um servidor WSGI como Gunicorn:
-
-```bash
-pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 run:app
-```
+**IMPORTANTE**: Altere a senha padrão em produção!
 
 ## Estrutura do Projeto
 
 ```
 gestao_financeira_app/
 ├── app/
-│   ├── __init__.py          # Inicialização do Flask
+│   ├── __init__.py          # Inicialização da aplicação Flask
 │   ├── models.py            # Modelos do banco de dados
-│   ├── routes.py            # Rotas e lógica de negócio
-│   ├── static/
-│   │   └── css/
-│   │       └── style.css    # Estilos personalizados
+│   ├── routes.py            # Rotas da aplicação
+│   ├── auth.py              # Autenticação de usuários
+│   ├── static/              # Arquivos estáticos (CSS, JS, imagens)
 │   └── templates/           # Templates HTML
-│       ├── base.html
-│       ├── index.html
-│       ├── contas/
-│       ├── transacoes/
-│       ├── cartoes/
-│       ├── faturas/
-│       ├── categorias/
-│       └── relatorios/
 ├── migrations/              # Migrações do banco de dados
-├── config.py               # Configurações do Flask
+├── config.py               # Configurações da aplicação
+├── run.py                  # Arquivo principal de execução
 ├── requirements.txt        # Dependências Python
-├── .env.example           # Exemplo de variáveis de ambiente
-├── run.py                 # Arquivo principal
+├── Dockerfile             # Configuração Docker
+├── docker-compose.yml     # Orquestração de containers
 └── README.md              # Este arquivo
 ```
 
-## Uso do Sistema
+## Comandos Úteis do Docker
 
-### Dashboard
-Acesse a página inicial para ver:
-- Saldo total de todas as contas
-- Receitas e despesas do mês
-- Faturas abertas
-- Ações rápidas
+```bash
+# Iniciar os containers
+docker-compose up -d
 
-### Gerenciar Contas
-1. Vá em "Contas" no menu
-2. Clique em "Nova Conta"
-3. Preencha: nome, tipo e saldo inicial
-4. Salve
+# Ver logs
+docker-compose logs -f
 
-### Adicionar Transações
-1. Vá em "Transações" > "Nova Transação"
-2. Preencha: descrição, valor, data, tipo (receita/despesa)
-3. Selecione a conta e categoria
-4. Salve (o saldo da conta será atualizado automaticamente)
+# Parar os containers
+docker-compose down
 
-### Gerenciar Cartões
-1. Vá em "Cartões" > "Novo Cartão"
-2. Preencha: nome, bandeira, limite
-3. Configure dias de fechamento e vencimento
-4. Salve
+# Reconstruir as imagens
+docker-compose build
 
-### Criar Faturas
-1. Vá em "Faturas" > "Nova Fatura"
-2. Selecione o cartão
-3. Defina mês/ano de referência
-4. Configure datas de fechamento e vencimento
-5. Salve
+# Executar migrações
+docker-compose exec web flask db upgrade
 
-### Pagar Faturas
-1. Vá em "Faturas" e clique em "Ver" na fatura desejada
-2. Clique em "Pagar Fatura"
-3. Informe o valor e a conta para débito
-4. Confirme (será criada uma transação de despesa automaticamente)
+# Acessar o shell do Python na aplicação
+docker-compose exec web python
+```
 
-### Ver Relatórios
-1. Vá em "Relatórios"
-2. Selecione mês e ano
-3. Clique em "Atualizar"
-4. Visualize os gráficos interativos
+## Desenvolvimento
 
-## Tecnologias Utilizadas
+Para desenvolvimento local, é recomendado usar o modo debug do Flask:
 
-- **Backend**: Flask 3.0
-- **Banco de Dados**: PostgreSQL + SQLAlchemy
-- **Frontend**: Bootstrap 5 + Bootstrap Icons
-- **Gráficos**: Plotly.js
-- **Migrações**: Flask-Migrate
+```bash
+export FLASK_ENV=development
+python run.py
+```
 
-## Melhorias Futuras
+A aplicação irá recarregar automaticamente ao detectar mudanças no código.
 
-- [ ] Autenticação de usuários
-- [ ] Exportação de dados (PDF, Excel)
-- [ ] Importação de extratos bancários (OFX)
-- [ ] Metas financeiras
-- [ ] Alertas por email de vencimento
-- [ ] Modo escuro
-- [ ] Aplicativo mobile
+## Segurança
 
-## Suporte
-
-Para problemas ou dúvidas, entre em contato ou abra uma issue no repositório.
+- Senhas são hasheadas usando Werkzeug Security
+- Sessões protegidas com chave secreta
+- Isolamento completo de dados entre usuários
+- Validação de propriedade de recursos em todas as rotas
+- Proteção contra SQL injection através do SQLAlchemy ORM
 
 ## Licença
 
-Este projeto é de uso pessoal. Sinta-se livre para modificar e adaptar às suas necessidades.
+Este projeto é de código aberto e está disponível sob a licença MIT.
+
+## Contribuindo
+
+Contribuições são bem-vindas! Por favor, abra uma issue ou pull request.
+
+## Autor
+
+Desenvolvido com Claude Code

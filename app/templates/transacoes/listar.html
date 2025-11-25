@@ -3,33 +3,229 @@
 {% block title %}Transações - Gestão Financeira{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Transações</h1>
+<!-- Header Section with Month Navigation -->
+<div class="d-flex justify-content-between align-items-center mb-4" style="margin-top: 2rem;">
+    <div class="d-flex align-items-center gap-3">
+        <div>
+            <h1 style="margin-bottom: 0.5rem;">Transações</h1>
+            <p class="text-muted" style="margin: 0; font-size: 0.95rem;">Data Grid de alta produtividade</p>
+        </div>
+    </div>
     <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Nova Transação
+        <i class="bi bi-plus-circle"></i> Nova Transação Completa
     </a>
 </div>
 
-<div class="card">
+<!-- Month Navigation Bar -->
+<div class="card mb-4" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.08), rgba(255, 255, 255, 0.7));">
+    <div class="card-body" style="padding: var(--space-md);">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center justify-content-start gap-2">
+                    <a href="{{ url_for('main.listar_transacoes', mes=mes_anterior, ano=ano_anterior, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                    <h4 style="margin: 0; font-weight: 700; color: var(--color-accent-blue);">
+                        {{ nome_mes }} {{ ano_atual }}
+                    </h4>
+                    <a href="{{ url_for('main.listar_transacoes', mes=mes_proximo, ano=ano_proximo, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                    {% if mes_atual != mes_sistema or ano_atual != ano_sistema %}
+                    <a href="{{ url_for('main.listar_transacoes') }}"
+                       class="btn btn-sm btn-outline"
+                       title="Voltar para mês atual">
+                        <i class="bi bi-calendar-today"></i> Hoje
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 208, 132, 0.1); border-radius: var(--radius-md);">
+                            <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Receitas</small>
+                            <div class="financial-value positive" style="font-size: 1.25rem; margin-top: 0.25rem;">
+                                R$ {{ "%.2f"|format(total_receitas) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="text-align: center; padding: var(--space-sm); background: rgba(255, 59, 87, 0.1); border-radius: var(--radius-md);">
+                            <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Despesas</small>
+                            <div class="financial-value negative" style="font-size: 1.25rem; margin-top: 0.25rem;">
+                                R$ {{ "%.2f"|format(total_despesas) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 102, 255, 0.1); border-radius: var(--radius-md);">
+                            <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Saldo</small>
+                            <div class="financial-value {% if saldo_mes >= 0 %}positive{% else %}negative{% endif %}" style="font-size: 1.25rem; margin-top: 0.25rem;">
+                                {% if saldo_mes >= 0 %}+{% endif %} R$ {{ "%.2f"|format(saldo_mes) }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5><i class="bi bi-funnel"></i> Filtros Adicionais</h5>
+    </div>
     <div class="card-body">
-        <table class="table table-hover">
+        <form method="GET" class="row g-3">
+            <!-- Hidden fields to preserve month/year -->
+            <input type="hidden" name="mes" value="{{ mes_atual }}">
+            <input type="hidden" name="ano" value="{{ ano_atual }}">
+
+            <div class="col-md-3">
+                <label for="tipo" class="form-label">Tipo</label>
+                <select class="form-select" id="tipo" name="tipo">
+                    <option value="">Todos</option>
+                    <option value="receita" {% if filtro_tipo == 'receita' %}selected{% endif %}>Receita</option>
+                    <option value="despesa" {% if filtro_tipo == 'despesa' %}selected{% endif %}>Despesa</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="conta_id" class="form-label">Conta</label>
+                <select class="form-select" id="conta_id" name="conta_id">
+                    <option value="">Todas</option>
+                    {% for conta in contas_filtro %}
+                        <option value="{{ conta.id }}" {% if filtro_conta == conta.id|string %}selected{% endif %}>
+                            {{ conta.nome }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="categoria_id" class="form-label">Categoria</label>
+                <select class="form-select" id="categoria_id" name="categoria_id">
+                    <option value="">Todas</option>
+                    {% for categoria in categorias_filtro %}
+                        <option value="{{ categoria.id }}" {% if filtro_categoria == categoria.id|string %}selected{% endif %}>
+                            {{ categoria.nome }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Data Grid Card -->
+<div class="card">
+    <div class="card-header">
+        <h5><i class="bi bi-table"></i> Data Grid - Transações</h5>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="table data-grid-table">
             <thead>
                 <tr>
-                    <th>Data</th>
+                    <th style="width: 50px;">Pago</th>
+                    <th style="width: 110px;">Data</th>
                     <th>Descrição</th>
-                    <th>Categoria</th>
-                    <th>Conta</th>
-                    <th>Tipo</th>
-                    <th>Valor</th>
+                    <th style="width: 180px;">Categoria</th>
+                    <th style="width: 160px;">Conta</th>
+                    <th style="width: 100px;">Tipo</th>
+                    <th style="width: 140px; text-align: right;">Valor</th>
+                    <th style="width: 120px; text-align: center;">Ações</th>
                 </tr>
             </thead>
             <tbody>
+                <!-- Inline Insert Row -->
+                <tr class="inline-insert-row">
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="form-check-input" id="inline-pago">
+                    </td>
+                    <td>
+                        <input type="date" class="form-control form-control-sm" id="inline-data" required>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" id="inline-descricao" placeholder="Descrição..." required>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" id="inline-categoria" required>
+                            <option value="">Selecione...</option>
+                            {% for categoria in categorias_filtro %}
+                                <option value="{{ categoria.id }}">{{ categoria.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" id="inline-conta" required>
+                            <option value="">Selecione...</option>
+                            {% for conta in contas_filtro %}
+                                <option value="{{ conta.id }}">{{ conta.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" id="inline-tipo" required>
+                            <option value="receita">Receita</option>
+                            <option value="despesa" selected>Despesa</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" class="form-control form-control-sm text-end" id="inline-valor" placeholder="0.00" required>
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-sm btn-success" onclick="criarTransacaoInline()" title="Adicionar">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline" onclick="limparFormInline()" title="Limpar">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </td>
+                </tr>
+
+                <!-- Existing Transactions -->
                 {% for transacao in transacoes.items %}
-                <tr>
-                    <td>{{ transacao.data.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ transacao.descricao }}</td>
-                    <td>{{ transacao.categoria.nome }}</td>
-                    <td>{{ transacao.conta.nome }}</td>
+                <tr data-id="{{ transacao.id }}">
+                    <td style="text-align: center;">
+                        {% if transacao.pode_marcar_pago() %}
+                            <input type="checkbox"
+                                   class="form-check-input toggle-pago"
+                                   data-id="{{ transacao.id }}"
+                                   {% if transacao.pago %}checked{% endif %}>
+                        {% else %}
+                            <i class="bi bi-credit-card text-muted" title="Cartão de crédito"></i>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-family: var(--font-mono); font-size: 0.9rem;">
+                            {{ transacao.data.strftime('%d/%m/%Y') }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-text-primary);">{{ transacao.descricao }}</strong>
+                        {% if transacao.parcelado %}
+                            <span class="badge bg-info" style="font-size: 0.7rem; margin-left: 0.5rem;">
+                                {{ transacao.numero_parcela }}/{{ transacao.total_parcelas }}
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-size: 0.9rem; color: var(--color-text-secondary);">
+                            {{ transacao.categoria.nome }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.9rem; color: var(--color-text-secondary);">
+                            {{ transacao.conta.nome }}
+                        </span>
+                    </td>
                     <td>
                         {% if transacao.tipo == 'receita' %}
                             <span class="badge bg-success">Receita</span>
@@ -37,46 +233,67 @@
                             <span class="badge bg-danger">Despesa</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td style="text-align: right;">
                         {% if transacao.tipo == 'receita' %}
-                            <span class="text-success">+ R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                            <span class="financial-value positive">+ R$ {{ "%.2f"|format(transacao.valor) }}</span>
                         {% else %}
-                            <span class="text-danger">- R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                            <span class="financial-value negative">- R$ {{ "%.2f"|format(transacao.valor) }}</span>
                         {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-warning" onclick="editarTransacao({{ transacao.id }})" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger"
+                                    onclick="confirmarDelecao({{ transacao.id }})" title="Deletar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">
-                        Nenhuma transação cadastrada.
+                    <td colspan="8" style="text-align: center; padding: 3rem;">
+                        <i class="bi bi-inbox" style="font-size: 3rem; color: var(--color-text-tertiary); opacity: 0.3; display: block; margin-bottom: 1rem;"></i>
+                        <p class="text-muted">Nenhuma transação encontrada</p>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
+        <!-- Pagination -->
         {% if transacoes.pages > 1 %}
-        <nav>
-            <ul class="pagination justify-content-center">
+        <nav style="padding: var(--space-lg);">
+            <ul class="pagination justify-content-center" style="margin: 0;">
                 {% if transacoes.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.prev_num) }}">Anterior</a>
+                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.prev_num, mes=mes_atual, ano=ano_atual, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}">
+                            <i class="bi bi-chevron-left"></i> Anterior
+                        </a>
                     </li>
                 {% endif %}
 
                 {% for page_num in range(1, transacoes.pages + 1) %}
                     {% if page_num == transacoes.page %}
-                        <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
                     {% else %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('main.listar_transacoes', page=page_num) }}">{{ page_num }}</a>
+                            <a class="page-link" href="{{ url_for('main.listar_transacoes', page=page_num, mes=mes_atual, ano=ano_atual, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}">
+                                {{ page_num }}
+                            </a>
                         </li>
                     {% endif %}
                 {% endfor %}
 
                 {% if transacoes.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.next_num) }}">Próxima</a>
+                        <a class="page-link" href="{{ url_for('main.listar_transacoes', page=transacoes.next_num, mes=mes_atual, ano=ano_atual, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}">
+                            Próxima <i class="bi bi-chevron-right"></i>
+                        </a>
                     </li>
                 {% endif %}
             </ul>
@@ -84,4 +301,262 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Hidden Delete Form -->
+<form id="formDeletar" method="POST" style="display: none;">
+</form>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: var(--color-surface); backdrop-filter: blur(20px); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border-light);">
+                <h5 class="modal-title" style="font-weight: 700;">
+                    <i class="bi bi-pencil"></i> Editar Transação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="editModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Data Grid Styles */
+.data-grid-table {
+    margin: 0;
+}
+
+.data-grid-table thead th {
+    background: rgba(0, 102, 255, 0.05);
+    border-bottom: 2px solid var(--color-accent-blue);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.inline-insert-row {
+    background: rgba(0, 208, 132, 0.05);
+    border-bottom: 2px solid var(--color-accent-green);
+}
+
+.inline-insert-row td {
+    padding: 0.75rem !important;
+}
+
+.inline-insert-row input,
+.inline-insert-row select {
+    font-size: 0.9rem;
+}
+
+.data-grid-table tbody tr:hover {
+    background: rgba(0, 102, 255, 0.03);
+}
+
+.data-grid-table tbody tr.pago {
+    opacity: 0.6;
+}
+
+/* Checkbox styles */
+.form-check-input {
+    cursor: pointer;
+    width: 1.2em;
+    height: 1.2em;
+}
+
+.form-check-input:checked {
+    background-color: var(--color-accent-green);
+    border-color: var(--color-accent-green);
+}
+
+/* Pagination Styling */
+.pagination .page-item {
+    margin: 0 0.25rem;
+}
+
+.pagination .page-link {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.85rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.pagination .page-link:hover {
+    background: var(--color-accent-blue);
+    color: white;
+    border-color: var(--color-accent-blue);
+    transform: translateY(-1px);
+}
+
+.pagination .page-item.active .page-link {
+    background: var(--color-accent-blue);
+    color: white;
+    border-color: var(--color-accent-blue);
+}
+
+/* Button Group Styling */
+.btn-group .btn {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.875rem;
+}
+
+.btn-sm {
+    padding: 0.375rem 0.75rem !important;
+    font-size: 0.875rem !important;
+}
+
+/* Table Enhancements */
+.data-grid-table tbody tr:last-child td {
+    border-bottom: none;
+}
+</style>
+
+<script>
+// Toggle Pago/Recebido
+document.querySelectorAll('.toggle-pago').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const transacaoId = this.dataset.id;
+        const row = this.closest('tr');
+
+        fetch(`/transacoes/${transacaoId}/toggle-pago`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Toggle visual feedback
+                if (data.pago) {
+                    row.classList.add('pago');
+                } else {
+                    row.classList.remove('pago');
+                }
+
+                // Show toast notification
+                showToast(data.message, 'success');
+            } else {
+                // Revert checkbox if failed
+                this.checked = !this.checked;
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            this.checked = !this.checked;
+            showToast('Erro ao atualizar status', 'error');
+        });
+    });
+});
+
+// Criar Transação Inline
+function criarTransacaoInline() {
+    const data = {
+        descricao: document.getElementById('inline-descricao').value,
+        valor: document.getElementById('inline-valor').value,
+        tipo: document.getElementById('inline-tipo').value,
+        data: document.getElementById('inline-data').value,
+        categoria_id: document.getElementById('inline-categoria').value,
+        conta_id: document.getElementById('inline-conta').value,
+        pago: document.getElementById('inline-pago').checked
+    };
+
+    // Validar
+    if (!data.descricao || !data.valor || !data.categoria_id || !data.conta_id) {
+        showToast('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+
+    fetch('/transacoes/criar-inline', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showToast(result.message, 'success');
+            // Recarregar página após 500ms
+            setTimeout(() => window.location.reload(), 500);
+        } else {
+            showToast(result.message, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Erro ao criar transação', 'error');
+    });
+}
+
+// Limpar Form Inline
+function limparFormInline() {
+    document.getElementById('inline-descricao').value = '';
+    document.getElementById('inline-valor').value = '';
+    document.getElementById('inline-categoria').value = '';
+    document.getElementById('inline-conta').value = '';
+    document.getElementById('inline-pago').checked = false;
+    document.getElementById('inline-data').value = new Date().toISOString().split('T')[0];
+    document.getElementById('inline-tipo').value = 'despesa';
+}
+
+// Editar Transação (abre modal ou redireciona)
+function editarTransacao(id) {
+    window.location.href = `/transacoes/${id}/editar`;
+}
+
+// Confirmar Deleção
+function confirmarDelecao(id) {
+    if (confirm('Tem certeza que deseja deletar esta transação?\n\nEsta ação não pode ser desfeita.')) {
+        const form = document.getElementById('formDeletar');
+        form.action = `/transacoes/${id}/deletar`;
+        form.submit();
+    }
+}
+
+// Toast Notification Helper
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show`;
+    toast.style.position = 'fixed';
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '9999';
+    toast.style.minWidth = '300px';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + Enter para salvar inline
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        criarTransacaoInline();
+    }
+    // Esc para limpar
+    if (e.key === 'Escape') {
+        limparFormInline();
+    }
+});
+</script>
 {% endblock %}

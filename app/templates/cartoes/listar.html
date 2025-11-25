@@ -3,42 +3,186 @@
 {% block title %}Cartões de Crédito - Gestão Financeira{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Cartões de Crédito</h1>
+<!-- Header Section -->
+<div class="d-flex justify-content-between align-items-center mb-4" style="margin-top: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">Cartões de Crédito</h1>
+        <p class="text-muted" style="margin: 0; font-size: 0.95rem;">Gerencie seus cartões e limites</p>
+    </div>
     <a href="{{ url_for('main.novo_cartao') }}" class="btn btn-primary">
         <i class="bi bi-plus-circle"></i> Novo Cartão
     </a>
 </div>
 
+<!-- Cards Grid -->
 <div class="row">
     {% for cartao in cartoes %}
-    <div class="col-md-6 mb-3">
-        <div class="card {% if not cartao.ativo %}bg-light{% endif %}">
-            <div class="card-body">
-                <h5 class="card-title">
-                    <i class="bi bi-credit-card"></i> {{ cartao.nome }}
-                    {% if not cartao.ativo %}
-                        <span class="badge bg-secondary">Inativo</span>
-                    {% endif %}
-                </h5>
-                <p class="card-text">
-                    <strong>Bandeira:</strong> {{ cartao.bandeira }}<br>
-                    <strong>Limite:</strong> R$ {{ "%.2f"|format(cartao.limite) }}<br>
-                    <strong>Fechamento:</strong> Dia {{ cartao.dia_fechamento }}<br>
-                    <strong>Vencimento:</strong> Dia {{ cartao.dia_vencimento }}
-                </p>
-                <a href="{{ url_for('main.editar_cartao', id=cartao.id) }}" class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-pencil"></i> Editar
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card credit-card-item {% if not cartao.ativo %}inactive{% endif %}">
+            <div class="card-body" style="padding: var(--space-lg);">
+                <!-- Card Header -->
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="card-title" style="margin-bottom: 0.5rem; font-size: 1.25rem; font-weight: 700; color: var(--color-text-primary);">
+                            {{ cartao.nome }}
+                        </h5>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <span class="badge" style="background: var(--color-accent-purple); text-transform: uppercase; font-size: 0.75rem;">
+                                {{ cartao.bandeira }}
+                            </span>
+                            {% if not cartao.ativo %}
+                                <span class="badge" style="background: var(--color-text-tertiary);">Inativo</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <i class="bi bi-credit-card-2-front" style="font-size: 2rem; color: var(--color-accent-blue); opacity: 0.3;"></i>
+                </div>
+
+                <!-- Limit Information -->
+                <div class="limit-info mb-3">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Limite Total</small>
+                            <div class="financial-value" style="font-size: 1rem; color: var(--color-text-primary);">
+                                R$ {{ "%.2f"|format(cartao.limite) }}
+                            </div>
+                        </div>
+                        <div>
+                            <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Disponível</small>
+                            <div class="financial-value positive" style="font-size: 1rem;">
+                                R$ {{ "%.2f"|format(cartao.limite_disponivel()) }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="limit-progress">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small style="font-weight: 600; font-size: 0.8rem; color: var(--color-text-secondary);">
+                                Utilização do Limite
+                            </small>
+                            <small class="financial-value" style="font-size: 0.85rem; font-weight: 700;">
+                                {{ "%.1f"|format(cartao.percentual_utilizado()) }}%
+                            </small>
+                        </div>
+                        {% set percentual = cartao.percentual_utilizado() %}
+                        <div class="progress-container">
+                            <div class="progress-bar-custom {% if percentual >= 80 %}danger{% elif percentual >= 50 %}warning{% else %}success{% endif %}"
+                                 style="width: {{ percentual }}%">
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.5rem;">
+                            <small class="text-muted" style="font-size: 0.75rem;">
+                                Utilizado: <span class="financial-value negative">R$ {{ "%.2f"|format(cartao.limite_utilizado) }}</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Dates -->
+                <div class="card-dates" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: var(--space-md); background: rgba(0, 0, 0, 0.02); border-radius: var(--radius-sm); margin-bottom: 1rem;">
+                    <div>
+                        <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Fechamento</small>
+                        <div style="font-family: var(--font-mono); font-weight: 600; color: var(--color-text-primary);">
+                            Dia {{ cartao.dia_fechamento }}
+                        </div>
+                    </div>
+                    <div>
+                        <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Vencimento</small>
+                        <div style="font-family: var(--font-mono); font-weight: 600; color: var(--color-text-primary);">
+                            Dia {{ cartao.dia_vencimento }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <a href="{{ url_for('main.editar_cartao', id=cartao.id) }}" class="btn btn-outline w-100">
+                    <i class="bi bi-pencil"></i> Editar Cartão
                 </a>
             </div>
         </div>
     </div>
     {% else %}
     <div class="col-12">
-        <div class="alert alert-info">
-            Nenhum cartão de crédito cadastrado.
+        <div class="card">
+            <div class="card-body text-center" style="padding: 4rem 2rem;">
+                <i class="bi bi-credit-card" style="font-size: 4rem; color: var(--color-text-tertiary); opacity: 0.3; display: block; margin-bottom: 1.5rem;"></i>
+                <h5 style="color: var(--color-text-secondary); margin-bottom: 1rem;">Nenhum cartão cadastrado</h5>
+                <p class="text-muted" style="margin-bottom: 1.5rem;">Comece adicionando seu primeiro cartão de crédito</p>
+                <a href="{{ url_for('main.novo_cartao') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Adicionar Primeiro Cartão
+                </a>
+            </div>
         </div>
     </div>
     {% endfor %}
 </div>
+
+<style>
+/* Credit Card Specific Styles */
+.credit-card-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.credit-card-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--color-accent-blue), var(--color-accent-purple));
+}
+
+.credit-card-item.inactive {
+    opacity: 0.7;
+}
+
+.credit-card-item.inactive::before {
+    background: var(--color-text-tertiary);
+}
+
+/* Custom Progress Bar */
+.progress-container {
+    width: 100%;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 100px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar-custom {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.progress-bar-custom.success {
+    background: linear-gradient(90deg, var(--color-accent-green), #00f7a0);
+}
+
+.progress-bar-custom.warning {
+    background: linear-gradient(90deg, var(--color-accent-orange), #ffb366);
+}
+
+.progress-bar-custom.danger {
+    background: linear-gradient(90deg, var(--color-accent-red), #ff6b85);
+}
+
+/* Hover Effect for Cards */
+.credit-card-item:hover {
+    transform: translateY(-4px);
+}
+
+/* Limit Info Styling */
+.limit-info {
+    padding: var(--space-md);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-light);
+}
+</style>
 {% endblock %}

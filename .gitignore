@@ -59,3 +59,9 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Node modules
+node_modules/
+
+# Migration scripts (development only)
+migrate_*.py

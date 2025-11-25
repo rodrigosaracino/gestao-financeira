@@ -3,109 +3,249 @@
 {% block title %}Fatura {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }} - {{ fatura.cartao.nome }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Fatura {{ fatura.cartao.nome }}</h1>
-    <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-secondary">
+<!-- Header Section -->
+<div class="d-flex justify-content-between align-items-center mb-4" style="margin-top: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">{{ fatura.cartao.nome }}</h1>
+        <p class="text-muted" style="margin: 0; font-size: 0.95rem;">
+            Fatura {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }}
+        </p>
+    </div>
+    <a href="{{ url_for('main.listar_faturas') }}" class="btn btn-outline">
         <i class="bi bi-arrow-left"></i> Voltar
     </a>
 </div>
 
+<!-- Invoice Summary Section -->
 <div class="row mb-4">
-    <div class="col-md-12">
+    <div class="col-md-8">
         <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-receipt-cutoff"></i> Informações da Fatura</h5>
+            </div>
             <div class="card-body">
-                <h5>Informações da Fatura</h5>
-                <p>
-                    <strong>Referência:</strong> {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }}<br>
-                    <strong>Fechamento:</strong> {{ fatura.data_fechamento.strftime('%d/%m/%Y') }}<br>
-                    <strong>Vencimento:</strong> {{ fatura.data_vencimento.strftime('%d/%m/%Y') }}<br>
-                    <strong>Valor Total:</strong> R$ {{ "%.2f"|format(fatura.valor_total) }}<br>
-                    <strong>Valor Pago:</strong> R$ {{ "%.2f"|format(fatura.valor_pago) }}<br>
-                    <strong>Status:</strong>
-                    {% if fatura.status == 'paga' %}
-                        <span class="badge bg-success">Paga</span>
-                    {% elif fatura.status == 'fechada' %}
-                        <span class="badge bg-warning">Fechada</span>
-                    {% elif fatura.status == 'vencida' %}
-                        <span class="badge bg-danger">Vencida</span>
-                    {% else %}
-                        <span class="badge bg-info">Aberta</span>
-                    {% endif %}
-                </p>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Período de Referência</small>
+                            <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary);">
+                                {{ fatura.mes_referencia }}/{{ fatura.ano_referencia }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Status</small>
+                            <div>
+                                {% if fatura.status == 'paga' %}
+                                    <span class="badge bg-success" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-check-circle"></i> Paga
+                                    </span>
+                                {% elif fatura.status == 'fechada' %}
+                                    <span class="badge bg-warning" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-lock"></i> Fechada
+                                    </span>
+                                {% elif fatura.status == 'vencida' %}
+                                    <span class="badge bg-danger" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-exclamation-triangle"></i> Vencida
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-info" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-calendar"></i> Aberta
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Data de Fechamento</small>
+                            <div style="font-family: var(--font-mono); font-size: 1rem; font-weight: 600; color: var(--color-text-secondary);">
+                                {{ fatura.data_fechamento.strftime('%d/%m/%Y') }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-item">
+                            <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Data de Vencimento</small>
+                            <div style="font-family: var(--font-mono); font-size: 1rem; font-weight: 600; color: var(--color-text-secondary);">
+                                {{ fatura.data_vencimento.strftime('%d/%m/%Y') }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 {% if fatura.status != 'paga' %}
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#pagarModal">
-                    <i class="bi bi-cash"></i> Pagar Fatura
-                </button>
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--color-border-light);">
+                    <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#pagarModal">
+                        <i class="bi bi-cash-coin"></i> Pagar Fatura
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Summary Card -->
+    <div class="col-md-4">
+        <div class="card" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.08), rgba(255, 255, 255, 0.7)); border: 1px solid rgba(0, 102, 255, 0.2);">
+            <div class="card-body" style="text-align: center; padding: var(--space-lg);">
+                <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Valor Total</small>
+                <div class="financial-value" style="font-size: 2.5rem; color: var(--color-accent-blue); margin: var(--space-sm) 0;">
+                    R$ {{ "%.2f"|format(fatura.valor_total) }}
+                </div>
+
+                {% if fatura.valor_pago > 0 %}
+                <div style="margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid rgba(0, 0, 0, 0.1);">
+                    <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Valor Pago</small>
+                    <div class="financial-value positive" style="font-size: 1.25rem;">
+                        R$ {{ "%.2f"|format(fatura.valor_pago) }}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if fatura.valor_total - fatura.valor_pago > 0 %}
+                <div style="margin-top: var(--space-sm);">
+                    <small class="text-muted" style="display: block; font-size: 0.75rem; margin-bottom: 0.25rem;">Saldo Restante</small>
+                    <div class="financial-value negative" style="font-size: 1.25rem;">
+                        R$ {{ "%.2f"|format(fatura.valor_total - fatura.valor_pago) }}
+                    </div>
+                </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
 
+<!-- Transactions Table -->
 <div class="card">
     <div class="card-header">
-        <h5>Transações da Fatura</h5>
+        <h5><i class="bi bi-list-ul"></i> Transações da Fatura</h5>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Data</th>
+                    <th style="width: 120px;">Data</th>
                     <th>Descrição</th>
-                    <th>Categoria</th>
-                    <th>Valor</th>
+                    <th style="width: 200px;">Categoria</th>
+                    <th style="width: 150px; text-align: right;">Valor</th>
                 </tr>
             </thead>
             <tbody>
                 {% for transacao in transacoes %}
                 <tr>
-                    <td>{{ transacao.data.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ transacao.descricao }}</td>
-                    <td>{{ transacao.categoria.nome }}</td>
-                    <td>R$ {{ "%.2f"|format(transacao.valor) }}</td>
+                    <td>
+                        <span style="font-family: var(--font-mono); font-size: 0.9rem;">
+                            {{ transacao.data.strftime('%d/%m/%Y') }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-text-primary);">{{ transacao.descricao }}</strong>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.9rem; color: var(--color-text-secondary);">
+                            {{ transacao.categoria.nome }}
+                        </span>
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="financial-value" style="color: var(--color-text-primary);">
+                            R$ {{ "%.2f"|format(transacao.valor) }}
+                        </span>
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted">
-                        Nenhuma transação nesta fatura.
+                    <td colspan="4" style="text-align: center; padding: 3rem;">
+                        <i class="bi bi-inbox" style="font-size: 3rem; color: var(--color-text-tertiary); opacity: 0.3; display: block; margin-bottom: 1rem;"></i>
+                        <p class="text-muted">Nenhuma transação nesta fatura</p>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if transacoes %}
+            <tfoot style="background: rgba(0, 0, 0, 0.02);">
+                <tr>
+                    <td colspan="3" style="text-align: right; font-weight: 600; padding: var(--space-md);">
+                        Total da Fatura:
+                    </td>
+                    <td style="text-align: right; padding: var(--space-md);">
+                        <span class="financial-value" style="font-size: 1.1rem; color: var(--color-accent-blue);">
+                            R$ {{ "%.2f"|format(fatura.valor_total) }}
+                        </span>
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
 </div>
 
-<!-- Modal Pagar Fatura -->
+<!-- Payment Modal -->
 <div class="modal fade" id="pagarModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Pagar Fatura</h5>
+        <div class="modal-content" style="background: var(--color-surface); backdrop-filter: blur(20px); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border-light);">
+                <h5 class="modal-title" style="font-weight: 700;">
+                    <i class="bi bi-cash-coin"></i> Pagar Fatura
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('main.pagar_fatura', id=fatura.id) }}">
-                <div class="modal-body">
+                <div class="modal-body" style="padding: var(--space-lg);">
                     <div class="mb-3">
                         <label for="valor_pago" class="form-label">Valor a Pagar</label>
                         <input type="number" step="0.01" class="form-control" id="valor_pago"
-                               name="valor_pago" value="{{ fatura.valor_total }}" required>
+                               name="valor_pago" value="{{ fatura.valor_total }}" required
+                               style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600;">
+                        <small class="text-muted" style="display: block; margin-top: 0.5rem;">
+                            Valor total da fatura: R$ {{ "%.2f"|format(fatura.valor_total) }}
+                        </small>
                     </div>
                     <div class="mb-3">
                         <label for="conta_id" class="form-label">Conta para Débito</label>
                         <select class="form-select" id="conta_id" name="conta_id" required>
-                            <option value="">Selecione...</option>
-                            <!-- Esta lista será preenchida via JavaScript ou passar contas no contexto -->
+                            <option value="">Selecione a conta...</option>
+                            {% for conta in contas %}
+                                <option value="{{ conta.id }}">
+                                    {{ conta.nome }} - Saldo: R$ {{ "%.2f"|format(conta.saldo_atual) }}
+                                </option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Confirmar Pagamento</button>
+                <div class="modal-footer" style="border-top: 1px solid var(--color-border-light); padding: var(--space-md) var(--space-lg);">
+                    <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Confirmar Pagamento
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<style>
+/* Info Item Styling */
+.info-item {
+    padding: var(--space-md);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-light);
+}
+
+/* Modal Enhancements */
+.modal-content {
+    box-shadow: var(--shadow-lg);
+}
+
+/* Table Footer */
+.table tfoot tr {
+    font-weight: 600;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+</style>
 {% endblock %}

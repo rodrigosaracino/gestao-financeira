@@ -97,36 +97,68 @@
                 </div>
             </div>
 
-            <!-- Modal para criar categoria -->
-            <div class="modal fade" id="modalNovaCategoria" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Nova Categoria</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="nova_categoria_nome" class="form-label">Nome</label>
-                                <input type="text" class="form-control" id="nova_categoria_nome">
-                            </div>
-                            <div class="mb-3">
-                                <label for="nova_categoria_tipo" class="form-label">Tipo</label>
-                                <select class="form-select" id="nova_categoria_tipo">
+            <!-- Checkbox para marcar como pago -->
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pago" name="pago">
+                    <label class="form-check-label" for="pago">
+                        <i class="bi bi-check-circle"></i> Marcar como pago/recebido
+                    </label>
+                    <small class="form-text text-muted d-block mt-1">
+                        Marque se esta transação já foi efetivada
+                    </small>
+                </div>
+            </div>
+
+            <!-- Seção de Recorrência -->
+            <div class="card mb-3" style="background: rgba(0, 102, 255, 0.03); border: 1px solid rgba(0, 102, 255, 0.1);">
+                <div class="card-body">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="recorrente" name="recorrente">
+                        <label class="form-check-label" for="recorrente" style="font-weight: 600;">
+                            <i class="bi bi-arrow-repeat"></i> Transação Recorrente
+                        </label>
+                        <small class="form-text text-muted d-block mt-1">
+                            Marque para criar automaticamente esta transação em intervalos regulares
+                        </small>
+                    </div>
+
+                    <div id="campos_recorrencia" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="frequencia_recorrencia" class="form-label">Frequência</label>
+                                <select class="form-select" id="frequencia_recorrencia" name="frequencia_recorrencia">
                                     <option value="">Selecione...</option>
-                                    <option value="receita">Receita</option>
-                                    <option value="despesa">Despesa</option>
+                                    <option value="semanal">Semanal</option>
+                                    <option value="quinzenal">Quinzenal</option>
+                                    <option value="mensal">Mensal</option>
+                                    <option value="bimestral">Bimestral</option>
+                                    <option value="trimestral">Trimestral</option>
+                                    <option value="semestral">Semestral</option>
+                                    <option value="anual">Anual</option>
                                 </select>
                             </div>
-                            <div class="mb-3">
-                                <label for="nova_categoria_cor" class="form-label">Cor</label>
-                                <input type="color" class="form-control form-control-color"
-                                       id="nova_categoria_cor" value="#3498db">
+                            <div class="col-md-4 mb-3">
+                                <label for="data_inicio_recorrencia" class="form-label">Data de Início</label>
+                                <input type="date" class="form-control" id="data_inicio_recorrencia"
+                                       name="data_inicio_recorrencia" value="{{ data_hoje }}">
+                                <small class="form-text text-muted">
+                                    Primeira ocorrência
+                                </small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="quantidade_recorrencias" class="form-label">Quantidade de Vezes</label>
+                                <input type="number" class="form-control" id="quantidade_recorrencias"
+                                       name="quantidade_recorrencias" min="1" max="100" value="12">
+                                <small class="form-text text-muted">
+                                    Número de repetições
+                                </small>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary" id="btn_salvar_categoria">Salvar</button>
+                        <div class="alert alert-info" role="alert" style="font-size: 0.9rem; background: rgba(0, 102, 255, 0.05); border-color: rgba(0, 102, 255, 0.2);">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Como funciona:</strong> Serão geradas automaticamente <span id="preview_quantidade">12</span> transações
+                            conforme a frequência selecionada, começando na data informada.
                         </div>
                     </div>
                 </div>
@@ -144,6 +176,102 @@
     </div>
 </div>
 
+<style>
+/* Modal Enhancements */
+.modal-content {
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal.fade .modal-dialog {
+    transition: transform 0.3s ease-out;
+}
+
+/* Ensure modal appears above backdrop */
+.modal {
+    z-index: 1055;
+}
+
+.modal-backdrop {
+    z-index: 1050;
+}
+
+/* Form Label Styling */
+.form-label {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+/* Autocomplete Suggestions Styling */
+#categoria_sugestoes {
+    background: var(--color-surface);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    margin-top: 0.25rem;
+}
+
+#categoria_sugestoes .list-group-item {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--color-border-light);
+    transition: all var(--transition-fast);
+}
+
+#categoria_sugestoes .list-group-item:last-child {
+    border-bottom: none;
+}
+
+#categoria_sugestoes .list-group-item:hover {
+    background: rgba(0, 102, 255, 0.05);
+    transform: translateX(4px);
+}
+</style>
+
+<!-- Modal para criar categoria -->
+<div class="modal fade" id="modalNovaCategoria" tabindex="-1" aria-labelledby="modalNovaCategoriaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--color-surface); backdrop-filter: blur(20px); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--color-border-light);">
+                <h5 class="modal-title" id="modalNovaCategoriaLabel" style="font-weight: 700;">
+                    <i class="bi bi-plus-circle"></i> Nova Categoria
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: var(--space-lg);">
+                <div class="mb-3">
+                    <label for="nova_categoria_nome" class="form-label">Nome</label>
+                    <input type="text" class="form-control" id="nova_categoria_nome" required>
+                </div>
+                <div class="mb-3">
+                    <label for="nova_categoria_tipo" class="form-label">Tipo</label>
+                    <select class="form-select" id="nova_categoria_tipo" required>
+                        <option value="">Selecione...</option>
+                        <option value="receita">Receita</option>
+                        <option value="despesa">Despesa</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="nova_categoria_cor" class="form-label">Cor</label>
+                    <input type="color" class="form-control form-control-color"
+                           id="nova_categoria_cor" value="#3498db">
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--color-border-light); padding: var(--space-md) var(--space-lg);">
+                <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn_salvar_categoria">
+                    <i class="bi bi-check-circle"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
@@ -152,9 +280,48 @@ document.addEventListener('DOMContentLoaded', function() {
     const categoriaOpcoes = document.getElementById('categoria_opcoes');
     const categoriaErro = document.getElementById('categoria_erro');
     const btnCriarCategoria = document.getElementById('btn_criar_categoria');
-    const modalNovaCategoria = new bootstrap.Modal(document.getElementById('modalNovaCategoria'));
+    const modalElement = document.getElementById('modalNovaCategoria');
     const btnSalvarCategoria = document.getElementById('btn_salvar_categoria');
     const tipoTransacao = document.getElementById('tipo');
+
+    // Controles de recorrência
+    const recorrenteCheckbox = document.getElementById('recorrente');
+    const camposRecorrencia = document.getElementById('campos_recorrencia');
+    const frequenciaRecorrencia = document.getElementById('frequencia_recorrencia');
+    const dataInicioRecorrencia = document.getElementById('data_inicio_recorrencia');
+    const quantidadeRecorrencias = document.getElementById('quantidade_recorrencias');
+    const previewQuantidade = document.getElementById('preview_quantidade');
+
+    // Mostrar/ocultar campos de recorrência
+    recorrenteCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            camposRecorrencia.style.display = 'block';
+            frequenciaRecorrencia.setAttribute('required', 'required');
+            dataInicioRecorrencia.setAttribute('required', 'required');
+            quantidadeRecorrencias.setAttribute('required', 'required');
+        } else {
+            camposRecorrencia.style.display = 'none';
+            frequenciaRecorrencia.removeAttribute('required');
+            dataInicioRecorrencia.removeAttribute('required');
+            quantidadeRecorrencias.removeAttribute('required');
+        }
+    });
+
+    // Atualizar preview da quantidade
+    quantidadeRecorrencias.addEventListener('input', function() {
+        previewQuantidade.textContent = this.value || '0';
+    });
+
+    // Initialize Bootstrap Modal
+    let modalNovaCategoria;
+    try {
+        modalNovaCategoria = new bootstrap.Modal(modalElement, {
+            backdrop: 'static',
+            keyboard: true
+        });
+    } catch (error) {
+        console.error('Error initializing modal:', error);
+    }
 
     // Criar array de categorias para busca
     let categorias = [];
@@ -348,7 +515,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Criar nova categoria
-    btnCriarCategoria.addEventListener('click', function() {
+    btnCriarCategoria.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('Opening modal...');
+
         const nomeBusca = categoriaBusca.value.trim();
         document.getElementById('nova_categoria_nome').value = nomeBusca;
 
@@ -358,7 +530,30 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('nova_categoria_tipo').value = tipoSelecionado;
         }
 
-        modalNovaCategoria.show();
+        // Show modal
+        try {
+            if (modalNovaCategoria) {
+                modalNovaCategoria.show();
+            } else {
+                console.error('Modal not initialized');
+                // Fallback: try to show modal directly with Bootstrap
+                const modalEl = document.getElementById('modalNovaCategoria');
+                if (modalEl) {
+                    modalEl.classList.add('show');
+                    modalEl.style.display = 'block';
+                    document.body.classList.add('modal-open');
+
+                    // Create backdrop
+                    const backdrop = document.createElement('div');
+                    backdrop.className = 'modal-backdrop fade show';
+                    backdrop.id = 'modal-backdrop-temp';
+                    document.body.appendChild(backdrop);
+                }
+            }
+        } catch (error) {
+            console.error('Error showing modal:', error);
+            alert('Erro ao abrir o modal. Por favor, recarregue a página.');
+        }
     });
 
     // Salvar nova categoria
@@ -400,7 +595,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 categoriaSugestoes.style.display = 'none';
 
                 // Fechar modal
-                modalNovaCategoria.hide();
+                if (modalNovaCategoria) {
+                    modalNovaCategoria.hide();
+                } else {
+                    // Fallback: close manually
+                    const modalEl = document.getElementById('modalNovaCategoria');
+                    if (modalEl) {
+                        modalEl.classList.remove('show');
+                        modalEl.style.display = 'none';
+                        document.body.classList.remove('modal-open');
+
+                        // Remove backdrop
+                        const backdrop = document.getElementById('modal-backdrop-temp');
+                        if (backdrop) {
+                            backdrop.remove();
+                        }
+                    }
+                }
 
                 // Limpar form
                 document.getElementById('nova_categoria_nome').value = '';
@@ -413,6 +624,27 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             alert('Erro ao criar categoria: ' + error.message);
         }
+    });
+
+    // Handle modal close buttons
+    const modalCloseButtons = modalElement.querySelectorAll('[data-bs-dismiss="modal"]');
+    modalCloseButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (modalNovaCategoria) {
+                modalNovaCategoria.hide();
+            } else {
+                // Fallback
+                modalElement.classList.remove('show');
+                modalElement.style.display = 'none';
+                document.body.classList.remove('modal-open');
+
+                const backdrop = document.getElementById('modal-backdrop-temp');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+            }
+        });
     });
 });
 </script>
