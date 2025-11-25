@@ -20,7 +20,7 @@
 <div class="card mb-4" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.08), rgba(255, 255, 255, 0.7));">
     <div class="card-body" style="padding: var(--space-md);">
         <div class="row align-items-center">
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <div class="d-flex align-items-center justify-content-start gap-2">
                     <a href="{{ url_for('main.listar_transacoes', mes=mes_anterior, ano=ano_anterior, tipo=filtro_tipo, conta_id=filtro_conta, categoria_id=filtro_categoria) }}"
                        class="btn btn-outline-primary btn-sm">
@@ -42,9 +42,9 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="col-md-8">
+            <div class="col-12 col-md-8">
                 <div class="row g-2">
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 208, 132, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Receitas</small>
                             <div class="financial-value positive" style="font-size: 1.25rem; margin-top: 0.25rem;">
@@ -52,7 +52,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(255, 59, 87, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Despesas</small>
                             <div class="financial-value negative" style="font-size: 1.25rem; margin-top: 0.25rem;">
@@ -60,7 +60,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 102, 255, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Saldo</small>
                             <div class="financial-value {% if saldo_mes >= 0 %}positive{% else %}negative{% endif %}" style="font-size: 1.25rem; margin-top: 0.25rem;">
@@ -85,7 +85,7 @@
             <input type="hidden" name="mes" value="{{ mes_atual }}">
             <input type="hidden" name="ano" value="{{ ano_atual }}">
 
-            <div class="col-md-3">
+            <div class="col-12 col-md-3">
                 <label for="tipo" class="form-label">Tipo</label>
                 <select class="form-select" id="tipo" name="tipo">
                     <option value="">Todos</option>
@@ -93,7 +93,7 @@
                     <option value="despesa" {% if filtro_tipo == 'despesa' %}selected{% endif %}>Despesa</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <label for="conta_id" class="form-label">Conta</label>
                 <select class="form-select" id="conta_id" name="conta_id">
                     <option value="">Todas</option>
@@ -104,7 +104,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <label for="categoria_id" class="form-label">Categoria</label>
                 <select class="form-select" id="categoria_id" name="categoria_id">
                     <option value="">Todas</option>
@@ -130,7 +130,7 @@
         <h5><i class="bi bi-table"></i> Data Grid - Transações</h5>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="table data-grid-table">
+        <div class="table-responsive"><table class="table data-grid-table">
             <thead>
                 <tr>
                     <th style="width: 50px;">Pago</th>
@@ -261,7 +261,7 @@
                 </tr>
                 {% endfor %}
             </tbody>
-        </table>
+        </table></div>
 
         <!-- Pagination -->
         {% if transacoes.pages > 1 %}

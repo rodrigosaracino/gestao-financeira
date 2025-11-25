@@ -18,14 +18,14 @@
 
 <!-- Invoice Summary Section -->
 <div class="row mb-4">
-    <div class="col-md-8">
+    <div class="col-12 col-md-8">
         <div class="card">
             <div class="card-header">
                 <h5><i class="bi bi-receipt-cutoff"></i> Informações da Fatura</h5>
             </div>
             <div class="card-body">
                 <div class="row g-4">
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <div class="info-item">
                             <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Período de Referência</small>
                             <div style="font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; color: var(--color-text-primary);">
@@ -33,7 +33,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <div class="info-item">
                             <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Status</small>
                             <div>
@@ -57,7 +57,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <div class="info-item">
                             <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Data de Fechamento</small>
                             <div style="font-family: var(--font-mono); font-size: 1rem; font-weight: 600; color: var(--color-text-secondary);">
@@ -65,7 +65,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12 col-md-6">
                         <div class="info-item">
                             <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.25rem;">Data de Vencimento</small>
                             <div style="font-family: var(--font-mono); font-size: 1rem; font-weight: 600; color: var(--color-text-secondary);">
@@ -87,7 +87,7 @@
     </div>
 
     <!-- Payment Summary Card -->
-    <div class="col-md-4">
+    <div class="col-12 col-md-4">
         <div class="card" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.08), rgba(255, 255, 255, 0.7)); border: 1px solid rgba(0, 102, 255, 0.2);">
             <div class="card-body" style="text-align: center; padding: var(--space-lg);">
                 <small class="text-muted" style="display: block; font-size: 0.8rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Valor Total</small>
@@ -123,7 +123,7 @@
         <h5><i class="bi bi-list-ul"></i> Transações da Fatura</h5>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="table">
+        <div class="table-responsive"><table class="table">
             <thead>
                 <tr>
                     <th style="width: 120px;">Data</th>
@@ -177,7 +177,7 @@
                 </tr>
             </tfoot>
             {% endif %}
-        </table>
+        </table></div>
     </div>
 </div>
 

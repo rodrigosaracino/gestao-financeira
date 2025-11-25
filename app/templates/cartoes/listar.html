@@ -34,6 +34,16 @@
                                 <span class="badge" style="background: var(--color-text-tertiary);">Inativo</span>
                             {% endif %}
                         </div>
+                        {% if cartao.banco_emissor or cartao.numero_cartao %}
+                        <small class="text-muted d-block mt-2" style="font-size: 0.8rem;">
+                            {% if cartao.banco_emissor %}
+                                <i class="bi bi-bank"></i> {{ cartao.banco_emissor }}
+                            {% endif %}
+                            {% if cartao.numero_cartao %}
+                                <span class="ms-2">•••• {{ cartao.numero_cartao }}</span>
+                            {% endif %}
+                        </small>
+                        {% endif %}
                     </div>
                     <i class="bi bi-credit-card-2-front" style="font-size: 2rem; color: var(--color-accent-blue); opacity: 0.3;"></i>
                 </div>

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Conciliação Bancária{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-sm btn-outline-secondary me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h2 class="mb-0">
+                    <i class="bi bi-upload"></i> Nova Conciliação Bancária
+                </h2>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <label for="conta_id" class="form-label">
+                                <strong>Selecione a Conta</strong>
+                            </label>
+                            <select name="conta_id" id="conta_id" class="form-select" required>
+                                <option value="">-- Selecione --</option>
+                                {% for conta in contas %}
+                                <option value="{{ conta.id }}">
+                                    {{ conta.nome }} ({{ conta.tipo|capitalize }}) - Saldo: R$ {{ "%.2f"|format(conta.saldo_atual) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Selecione a conta bancária correspondente ao extrato que será importado.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="arquivo" class="form-label">
+                                <strong>Arquivo do Extrato</strong>
+                            </label>
+                            <input type="file"
+                                   class="form-control"
+                                   id="arquivo"
+                                   name="arquivo"
+                                   accept=".ofx,.csv,.OFX,.CSV"
+                                   required>
+                            <div class="form-text">
+                                Formatos aceitos: OFX, CSV
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Dica:</strong> O sistema tentará identificar automaticamente as transações já cadastradas,
+                            evitando duplicações. Você poderá revisar todas as sugestões antes de confirmar.
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-upload"></i> Fazer Upload e Processar
+                            </button>
+                            <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-outline-secondary">
+                                Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightbulb"></i> Como obter o extrato bancário
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>Formato OFX (Recomendado)</h6>
+                    <p>A maioria dos bancos brasileiros permite exportar o extrato em formato OFX:</p>
+                    <ul>
+                        <li>Acesse o internet banking do seu banco</li>
+                        <li>Vá até "Extratos" ou "Movimentação"</li>
+                        <li>Selecione o período desejado</li>
+                        <li>Procure a opção "Exportar" ou "Download"</li>
+                        <li>Escolha o formato OFX ou "Money"</li>
+                    </ul>
+
+                    <h6 class="mt-3">Formato CSV</h6>
+                    <p>Caso seu banco não ofereça OFX, use CSV:</p>
+                    <ul>
+                        <li>Exporte o extrato em formato CSV ou Excel</li>
+                        <li>Se for Excel, salve como CSV</li>
+                        <li>O arquivo deve conter pelo menos: data, descrição e valor</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

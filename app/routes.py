@@ -1,10 +1,16 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from app.models import db, Conta, Categoria, Transacao, CartaoCredito, Fatura
+from app.models import db, Conta, Categoria, Transacao, CartaoCredito, Fatura, ConciliacaoBancaria, ItemConciliacao
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy import func, extract
 from dateutil.relativedelta import relativedelta
+from werkzeug.utils import secure_filename
+from app.parsers import parse_file, detect_format
+from app.matching import processar_matching, estatisticas_matching
+from calendar import monthrange
+from collections import defaultdict
+import calendar
 
 bp = Blueprint('main', __name__)
 
@@ -14,9 +20,6 @@ bp = Blueprint('main', __name__)
 @login_required
 def index():
     """Dashboard principal com projeção de fluxo de caixa"""
-    import calendar
-    from collections import defaultdict
-
     # Obter mês e ano dos parâmetros ou usar valores atuais
     mes_filtro = request.args.get('mes', type=int) or datetime.now().month
     ano_filtro = request.args.get('ano', type=int) or datetime.now().year
@@ -232,8 +235,6 @@ def editar_conta(id):
 @login_required
 def listar_transacoes():
     """Lista todas as transações com filtros e navegação por mês"""
-    from calendar import monthrange
-
     page = request.args.get('page', 1, type=int)
 
     # Obter mês e ano da query string ou usar mês/ano atual
@@ -385,24 +386,10 @@ def nova_transacao():
                     flash('Conta não encontrada ou acesso negado!', 'error')
                     return redirect(url_for('main.nova_transacao'))
 
-            # Criar transação pai (registro da compra)
-            transacao_pai = Transacao(
-                descricao=request.form['descricao'],
-                valor=valor_total,
-                tipo='despesa',
-                data=data_compra,
-                forma_pagamento='cartao_credito',
-                cartao_credito_id=cartao_id,
-                parcelado=(total_parcelas > 1),
-                total_parcelas=total_parcelas,
-                conta_id=conta_id_form,
-                categoria_id=request.form['categoria_id']
-            )
-            db.session.add(transacao_pai)
-            db.session.flush()  # Para obter o ID
+            # CORREÇÃO: Criar APENAS as parcelas, não a transação pai
+            # A transação pai causava duplicação de valores
+            primeira_transacao_id = None  # Para vincular as parcelas entre si
 
-            # Criar parcelas
-            from dateutil.relativedelta import relativedelta
             for i in range(1, total_parcelas + 1):
                 # Calcular a data da parcela (mês seguinte)
                 data_parcela = data_compra + relativedelta(months=i-1)
@@ -422,12 +409,17 @@ def nova_transacao():
                     parcelado=True,
                     numero_parcela=i,
                     total_parcelas=total_parcelas,
-                    transacao_pai_id=transacao_pai.id,
+                    transacao_pai_id=primeira_transacao_id,  # Vincula à primeira parcela
                     conta_id=conta_id_form,
                     categoria_id=request.form['categoria_id'],
                     fatura_id=fatura.id
                 )
                 db.session.add(transacao_parcela)
+
+                # Guardar ID da primeira parcela para vincular as demais
+                if i == 1:
+                    db.session.flush()
+                    primeira_transacao_id = transacao_parcela.id
 
                 # Atualizar valor da fatura
                 fatura.valor_total += valor_parcela
@@ -438,6 +430,7 @@ def nova_transacao():
             db.session.commit()
             msg = f'Compra parcelada em {total_parcelas}x adicionada com sucesso!'
             flash(msg, 'success')
+            return redirect(url_for('main.listar_transacoes'))
 
         else:
             # Pagamento em dinheiro/débito
@@ -590,12 +583,36 @@ def deletar_transacao(id):
         Conta.user_id == current_user.id
     ).first_or_404()
 
-    # Reverter o efeito da transação no saldo
-    conta = Conta.query.get(transacao.conta_id)
-    if transacao.tipo == 'receita':
-        conta.saldo_atual -= transacao.valor
-    else:
-        conta.saldo_atual += transacao.valor
+    # Reverter o efeito da transação no saldo (apenas se estava marcada como paga)
+    if transacao.pago:
+        conta = Conta.query.get(transacao.conta_id)
+        if transacao.tipo == 'receita':
+            conta.saldo_atual -= transacao.valor
+        else:
+            conta.saldo_atual += transacao.valor
+
+    # Se for transação de cartão de crédito, atualizar fatura e limite
+    if transacao.forma_pagamento == 'cartao_credito':
+        # Atualizar valor da fatura
+        if transacao.fatura_id:
+            fatura = Fatura.query.get(transacao.fatura_id)
+            if fatura:
+                fatura.valor_total -= transacao.valor
+
+        # Atualizar limite utilizado do cartão (se for transação parcelada)
+        if transacao.cartao_credito_id and transacao.parcelado:
+            cartao = CartaoCredito.query.get(transacao.cartao_credito_id)
+            if cartao:
+                # Se for a primeira parcela ou transação pai, descontar o valor total
+                # Caso contrário, descontar apenas o valor da parcela
+                if transacao.numero_parcela == 1 or transacao.numero_parcela is None:
+                    # Calcular valor total do parcelamento
+                    valor_total_parcelamento = transacao.valor * transacao.total_parcelas
+                    cartao.limite_utilizado -= valor_total_parcelamento
+
+                    # Garantir que não fique negativo
+                    if cartao.limite_utilizado < 0:
+                        cartao.limite_utilizado = 0
 
     # Deletar a transação
     db.session.delete(transacao)
@@ -716,8 +733,6 @@ def obter_ou_criar_fatura(cartao, data_referencia):
         return fatura
 
     # Criar nova fatura
-    from calendar import monthrange
-
     # Calcular data de fechamento
     ultimo_dia_mes = monthrange(ano, mes)[1]
     if cartao.dia_fechamento > ultimo_dia_mes:
@@ -754,6 +769,30 @@ def obter_ou_criar_fatura(cartao, data_referencia):
     db.session.flush()
 
     return fatura
+
+
+def recalcular_valor_fatura(fatura_id):
+    """
+    Recalcula o valor total de uma fatura baseado nas transações vinculadas.
+
+    Args:
+        fatura_id: ID da fatura a ser recalculada
+
+    Returns:
+        O novo valor total da fatura
+    """
+    fatura = Fatura.query.get(fatura_id)
+    if not fatura:
+        return None
+
+    # Somar todas as transações desta fatura
+    transacoes = Transacao.query.filter_by(fatura_id=fatura_id).all()
+    valor_total = sum(transacao.valor for transacao in transacoes)
+
+    # Atualizar valor da fatura
+    fatura.valor_total = valor_total
+
+    return valor_total
 
 
 def gerar_transacoes_recorrentes(transacao_base, frequencia, data_inicio, quantidade, pago_inicial=False):
@@ -934,6 +973,8 @@ def novo_cartao():
         cartao = CartaoCredito(
             nome=request.form['nome'],
             bandeira=request.form['bandeira'],
+            banco_emissor=request.form.get('banco_emissor'),
+            numero_cartao=request.form.get('numero_cartao'),
             limite=limite,
             dia_fechamento=dia_fechamento,
             dia_vencimento=dia_vencimento,
@@ -956,6 +997,8 @@ def editar_cartao(id):
     if request.method == 'POST':
         cartao.nome = request.form['nome']
         cartao.bandeira = request.form['bandeira']
+        cartao.banco_emissor = request.form.get('banco_emissor')
+        cartao.numero_cartao = request.form.get('numero_cartao')
         cartao.limite = Decimal(request.form['limite'])
         cartao.dia_fechamento = int(request.form['dia_fechamento'])
         cartao.dia_vencimento = int(request.form['dia_vencimento'])
@@ -1134,3 +1177,258 @@ def api_fluxo_caixa():
         'receitas': dados_receitas,
         'despesas': dados_despesas
     })
+
+
+# ==================== ROTAS DE CONCILIAÇÃO BANCÁRIA ====================
+
+@bp.route('/conciliacao')
+@login_required
+def conciliacao_lista():
+    """Lista de conciliações bancárias"""
+    conciliacoes = ConciliacaoBancaria.query.filter_by(
+        user_id=current_user.id
+    ).order_by(ConciliacaoBancaria.data_upload.desc()).all()
+
+    return render_template('conciliacao/lista.html', conciliacoes=conciliacoes)
+
+
+@bp.route('/conciliacao/nova', methods=['GET', 'POST'])
+@login_required
+def conciliacao_nova():
+    """Upload de arquivo para conciliação"""
+    if request.method == 'POST':
+        # Validar se arquivo foi enviado
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo foi enviado', 'danger')
+            return redirect(request.url)
+
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo foi selecionado', 'danger')
+            return redirect(request.url)
+
+        # Obter conta selecionada
+        conta_id = request.form.get('conta_id', type=int)
+        if not conta_id:
+            flash('Selecione uma conta', 'danger')
+            return redirect(request.url)
+
+        # Verificar se conta pertence ao usuário
+        conta = Conta.query.filter_by(id=conta_id, user_id=current_user.id).first()
+        if not conta:
+            flash('Conta inválida', 'danger')
+            return redirect(url_for('main.conciliacao_nova'))
+
+        try:
+            # Ler conteúdo do arquivo
+            arquivo_content = arquivo.read()
+            arquivo_nome = secure_filename(arquivo.filename)
+
+            # Detectar formato
+            formato = detect_format(arquivo_content)
+            if formato == 'UNKNOWN':
+                flash('Formato de arquivo não reconhecido. Use OFX ou CSV.', 'danger')
+                return redirect(request.url)
+
+            # Parsear arquivo
+            resultado = parse_file(arquivo_content, formato)
+
+            if resultado['total'] == 0:
+                flash('Nenhuma transação encontrada no arquivo', 'warning')
+                return redirect(request.url)
+
+            # Criar conciliação
+            conciliacao = ConciliacaoBancaria(
+                user_id=current_user.id,
+                conta_id=conta_id,
+                arquivo_nome=arquivo_nome,
+                formato=formato,
+                status='processando',
+                total_linhas=resultado['total'],
+                data_inicio=resultado['date_range'][0],
+                data_fim=resultado['date_range'][1]
+            )
+            db.session.add(conciliacao)
+            db.session.flush()  # Para obter o ID
+
+            # Processar matching
+            itens_processados = processar_matching(
+                resultado['transactions'],
+                conta_id,
+                current_user.id
+            )
+
+            # Criar itens de conciliação
+            for item in itens_processados:
+                melhor_match = item.get('melhor_match')
+                item_conciliacao = ItemConciliacao(
+                    conciliacao_id=conciliacao.id,
+                    data=item['data'],
+                    descricao=item['descricao'],
+                    valor=item['valor'],
+                    tipo=item['tipo'],
+                    numero_documento=item.get('numero_documento'),
+                    saldo_apos=item.get('saldo_apos'),
+                    status='pendente',
+                    transacao_id=melhor_match[0].id if melhor_match else None,
+                    categoria_sugerida_id=item['categoria_sugerida'].id if item['categoria_sugerida'] else None,
+                    score_matching=item['score_matching']
+                )
+                db.session.add(item_conciliacao)
+
+            # Atualizar status
+            conciliacao.status = 'pendente_revisao'
+            db.session.commit()
+
+            flash(f'Arquivo processado com sucesso! {resultado["total"]} transações encontradas.', 'success')
+            return redirect(url_for('main.conciliacao_revisar', id=conciliacao.id))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao processar arquivo: {str(e)}', 'danger')
+            return redirect(request.url)
+
+    # GET: Mostrar formulário
+    contas = Conta.query.filter_by(user_id=current_user.id, ativa=True).all()
+    return render_template('conciliacao/nova.html', contas=contas)
+
+
+@bp.route('/conciliacao/<int:id>/revisar')
+@login_required
+def conciliacao_revisar(id):
+    """Revisar itens da conciliação e confirmar matches"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    # Buscar itens
+    itens = ItemConciliacao.query.filter_by(
+        conciliacao_id=conciliacao.id
+    ).order_by(ItemConciliacao.data.desc()).all()
+
+    # Estatísticas
+    stats = {
+        'total': len(itens),
+        'com_match_forte': sum(1 for item in itens if item.score_matching and item.score_matching >= 90),
+        'com_match_medio': sum(1 for item in itens if item.score_matching and 70 <= item.score_matching < 90),
+        'sem_match': sum(1 for item in itens if not item.score_matching or item.score_matching < 70)
+    }
+
+    # Buscar todas as categorias para seleção
+    categorias = Categoria.query.filter_by(user_id=current_user.id).all()
+
+    return render_template(
+        'conciliacao/revisar.html',
+        conciliacao=conciliacao,
+        itens=itens,
+        stats=stats,
+        categorias=categorias
+    )
+
+
+@bp.route('/conciliacao/<int:id>/processar', methods=['POST'])
+@login_required
+def conciliacao_processar(id):
+    """Processar ações da conciliação (conciliar, importar, ignorar)"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    try:
+        # Obter ações do formulário
+        acoes = request.form.getlist('acao')  # Lista de ações no formato "item_id:acao:transacao_id"
+
+        linhas_conciliadas = 0
+        linhas_importadas = 0
+
+        for acao_str in acoes:
+            partes = acao_str.split(':')
+            if len(partes) < 2:
+                continue
+
+            item_id = int(partes[0])
+            acao = partes[1]
+
+            item = ItemConciliacao.query.filter_by(
+                id=item_id,
+                conciliacao_id=conciliacao.id
+            ).first()
+
+            if not item:
+                continue
+
+            if acao == 'conciliar':
+                # Conciliar com transação existente
+                if len(partes) >= 3:
+                    transacao_id = int(partes[2])
+                else:
+                    transacao_id = item.transacao_id
+
+                if transacao_id:
+                    item.transacao_id = transacao_id
+                    item.status = 'conciliado'
+                    linhas_conciliadas += 1
+
+            elif acao == 'importar':
+                # Importar como nova transação
+                categoria_id = request.form.get(f'categoria_{item_id}', type=int)
+                if not categoria_id:
+                    categoria_id = item.categoria_sugerida_id
+
+                nova_transacao = Transacao(
+                    descricao=item.descricao,
+                    valor=item.valor,
+                    tipo=item.tipo,
+                    data=item.data,
+                    conta_id=conciliacao.conta_id,
+                    categoria_id=categoria_id,
+                    pago=True,  # Transações do extrato já foram pagas
+                    forma_pagamento='dinheiro'
+                )
+                db.session.add(nova_transacao)
+                db.session.flush()
+
+                item.transacao_id = nova_transacao.id
+                item.status = 'importado'
+                linhas_importadas += 1
+
+            elif acao == 'ignorar':
+                # Ignorar item
+                item.status = 'ignorado'
+
+        # Atualizar estatísticas da conciliação
+        conciliacao.linhas_conciliadas = linhas_conciliadas
+        conciliacao.linhas_importadas = linhas_importadas
+        conciliacao.status = 'concluida'
+
+        db.session.commit()
+
+        flash(f'Conciliação concluída! {linhas_conciliadas} conciliadas, {linhas_importadas} importadas.', 'success')
+        return redirect(url_for('main.conciliacao_lista'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao processar conciliação: {str(e)}', 'danger')
+        return redirect(url_for('main.conciliacao_revisar', id=id))
+
+
+@bp.route('/conciliacao/<int:id>/excluir', methods=['POST'])
+@login_required
+def conciliacao_excluir(id):
+    """Excluir uma conciliação"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    try:
+        db.session.delete(conciliacao)
+        db.session.commit()
+        flash('Conciliação excluída com sucesso', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir conciliação: {str(e)}', 'danger')
+
+    return redirect(url_for('main.conciliacao_lista'))

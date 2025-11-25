@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Conciliação Bancária{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center align-items-md-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-arrow-left-right"></i> <span class="d-none d-md-inline">Conciliação Bancária</span><span class="d-md-none">Conciliação</span>
+        </h2>
+        <a href="{{ url_for('main.conciliacao_nova') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> <span class="d-none d-sm-inline">Nova Conciliação</span><span class="d-sm-none">Nova</span>
+        </a>
+    </div>
+
+    {% if conciliacoes %}
+    <!-- Versão Desktop -->
+    <div class="card d-none d-lg-block">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Arquivo</th>
+                            <th>Conta</th>
+                            <th>Formato</th>
+                            <th>Período</th>
+                            <th>Total</th>
+                            <th>Conciliadas</th>
+                            <th>Importadas</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for conc in conciliacoes %}
+                        <tr>
+                            <td>{{ conc.data_upload.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <i class="bi bi-file-earmark-text"></i>
+                                {{ conc.arquivo_nome }}
+                            </td>
+                            <td>{{ conc.conta.nome }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ conc.formato }}</span>
+                            </td>
+                            <td>
+                                {% if conc.data_inicio and conc.data_fim %}
+                                    {{ conc.data_inicio.strftime('%d/%m/%Y') }} a {{ conc.data_fim.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ conc.total_linhas }}</td>
+                            <td>{{ conc.linhas_conciliadas or 0 }}</td>
+                            <td>{{ conc.linhas_importadas or 0 }}</td>
+                            <td>
+                                {% if conc.status == 'concluida' %}
+                                    <span class="badge bg-success">Concluída</span>
+                                {% elif conc.status == 'pendente_revisao' %}
+                                    <span class="badge bg-warning text-dark">Pendente Revisão</span>
+                                {% elif conc.status == 'processando' %}
+                                    <span class="badge bg-info">Processando</span>
+                                {% elif conc.status == 'erro' %}
+                                    <span class="badge bg-danger">Erro</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if conc.status == 'pendente_revisao' %}
+                                    <a href="{{ url_for('main.conciliacao_revisar', id=conc.id) }}"
+                                       class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Revisar
+                                    </a>
+                                {% elif conc.status == 'concluida' %}
+                                    <a href="{{ url_for('main.conciliacao_revisar', id=conc.id) }}"
+                                       class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                {% endif %}
+                                <form action="{{ url_for('main.conciliacao_excluir', id=conc.id) }}"
+                                      method="POST"
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Tem certeza que deseja excluir esta conciliação?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Versão Mobile (Cards) -->
+    <div class="d-lg-none">
+        {% for conc in conciliacoes %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h6 class="mb-1">
+                            <i class="bi bi-file-earmark-text"></i> {{ conc.arquivo_nome }}
+                        </h6>
+                        <small class="text-muted">{{ conc.data_upload.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </div>
+                    {% if conc.status == 'concluida' %}
+                        <span class="badge bg-success">Concluída</span>
+                    {% elif conc.status == 'pendente_revisao' %}
+                        <span class="badge bg-warning text-dark">Pendente</span>
+                    {% elif conc.status == 'processando' %}
+                        <span class="badge bg-info">Processando</span>
+                    {% elif conc.status == 'erro' %}
+                        <span class="badge bg-danger">Erro</span>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Conta</small>
+                            <strong>{{ conc.conta.nome }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Formato</small>
+                            <span class="badge bg-secondary">{{ conc.formato }}</span>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted d-block">Período</small>
+                            {% if conc.data_inicio and conc.data_fim %}
+                                <strong>{{ conc.data_inicio.strftime('%d/%m/%Y') }} a {{ conc.data_fim.strftime('%d/%m/%Y') }}</strong>
+                            {% else %}
+                                <strong>-</strong>
+                            {% endif %}
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Total</small>
+                            <strong>{{ conc.total_linhas }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Conciliadas</small>
+                            <strong>{{ conc.linhas_conciliadas or 0 }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Importadas</small>
+                            <strong>{{ conc.linhas_importadas or 0 }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    {% if conc.status == 'pendente_revisao' %}
+                        <a href="{{ url_for('main.conciliacao_revisar', id=conc.id) }}"
+                           class="btn btn-primary btn-sm flex-grow-1">
+                            <i class="bi bi-eye"></i> Revisar
+                        </a>
+                    {% elif conc.status == 'concluida' %}
+                        <a href="{{ url_for('main.conciliacao_revisar', id=conc.id) }}"
+                           class="btn btn-info btn-sm flex-grow-1">
+                            <i class="bi bi-eye"></i> Ver
+                        </a>
+                    {% endif %}
+                    <form action="{{ url_for('main.conciliacao_excluir', id=conc.id) }}"
+                          method="POST"
+                          onsubmit="return confirm('Tem certeza que deseja excluir esta conciliação?');">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i>
+        Nenhuma conciliação bancária realizada ainda.
+        <a href="{{ url_for('main.conciliacao_nova') }}" class="alert-link">
+            Clique aqui para fazer upload do primeiro arquivo.
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-question-circle"></i> Como usar
+            </h5>
+        </div>
+        <div class="card-body">
+            <ol>
+                <li><strong>Baixe o extrato bancário:</strong> Faça download do extrato em formato OFX ou CSV do site do seu banco.</li>
+                <li><strong>Faça upload:</strong> Clique em "Nova Conciliação" e selecione o arquivo e a conta correspondente.</li>
+                <li><strong>Revise os matches:</strong> O sistema tentará identificar automaticamente transações já cadastradas.</li>
+                <li><strong>Confirme:</strong> Revise as sugestões e confirme quais transações devem ser conciliadas ou importadas.</li>
+            </ol>
+            <h6>Formatos aceitos:</h6>
+            <ul>
+                <li><strong>OFX:</strong> Formato padrão usado pela maioria dos bancos brasileiros</li>
+                <li><strong>CSV:</strong> Arquivo de texto separado por vírgulas (verifique o formato com seu banco)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,20 @@
-# Sistema de Gestão Financeira
+# 💰 Sistema de Gestão Financeira
 
 Sistema completo de gestão financeira pessoal desenvolvido com Flask, PostgreSQL e Bootstrap 5.
+
+## 🚀 Deploy Rápido em Produção
+
+### Deploy via Git (RECOMENDADO) ⚡
+
+```bash
+# 1. No seu computador
+bash git_push.sh
+
+# 2. Na VPS
+bash git_deploy.sh
+```
+
+📖 **Guia completo**: [GIT_DEPLOY.md](GIT_DEPLOY.md) | [QUICK_START_DEPLOY.md](QUICK_START_DEPLOY.md)
 
 ## Funcionalidades
 

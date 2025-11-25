@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0066ff">
     <title>{% block title %}Gestão Financeira{% endblock %}</title>
 
     <!-- Google Fonts -->
@@ -27,53 +30,58 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.index') }}">
-                            <i class="bi bi-house"></i> Dashboard
+                            <i class="bi bi-house"></i> <span class="d-lg-inline">Dashboard</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.listar_contas') }}">
-                            <i class="bi bi-bank"></i> Contas
+                            <i class="bi bi-bank"></i> <span class="d-lg-inline">Contas</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.listar_transacoes') }}">
-                            <i class="bi bi-arrow-left-right"></i> Transações
+                            <i class="bi bi-arrow-left-right"></i> <span class="d-lg-inline">Transações</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.listar_cartoes') }}">
-                            <i class="bi bi-credit-card"></i> Cartões
+                            <i class="bi bi-credit-card"></i> <span class="d-lg-inline">Cartões</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.listar_faturas') }}">
-                            <i class="bi bi-receipt"></i> Faturas
+                            <i class="bi bi-receipt"></i> <span class="d-lg-inline">Faturas</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.conciliacao_lista') }}">
+                            <i class="bi bi-arrow-down-up"></i> <span class="d-lg-inline">Conciliação</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.listar_categorias') }}">
-                            <i class="bi bi-tags"></i> Categorias
+                            <i class="bi bi-tags"></i> <span class="d-lg-inline">Categorias</span>
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.relatorios') }}">
-                            <i class="bi bi-graph-up"></i> Relatórios
+                            <i class="bi bi-graph-up"></i> <span class="d-lg-inline">Relatórios</span>
                         </a>
                     </li>
                 </ul>
-                <div class="d-flex align-items-center">
-                    {% if current_user.is_authenticated %}
-                    <span class="navbar-text me-3" style="color: var(--color-text-secondary);">
+                {% if current_user.is_authenticated %}
+                <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-2 mt-3 mt-lg-0">
+                    <span class="navbar-text" style="color: var(--color-text-secondary);">
                         <i class="bi bi-person-circle"></i> {{ current_user.nome }}
                     </span>
                     <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm">
                         <i class="bi bi-box-arrow-right"></i> Sair
                     </a>
-                    {% endif %}
                 </div>
+                {% endif %}
             </div>
         </div>
     </nav>

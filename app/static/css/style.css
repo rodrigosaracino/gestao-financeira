@@ -606,14 +606,51 @@ h3 {
    RESPONSIVE DESIGN
    ============================================ */
 
-@media (max-width: 768px) {
+/* Tablets e mobile landscape */
+@media (max-width: 992px) {
     :root {
         --space-lg: 1.5rem;
         --space-xl: 2rem;
     }
 
+    .navbar-collapse {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        padding: var(--space-md);
+        margin-top: var(--space-sm);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+    }
+
+    .nav-link {
+        margin: 0.25rem 0;
+        justify-content: flex-start;
+    }
+
+    .navbar-text {
+        margin-top: var(--space-sm);
+        padding-top: var(--space-sm);
+        border-top: 1px solid var(--color-border-light);
+    }
+}
+
+/* Mobile portrait e landscape */
+@media (max-width: 768px) {
+    :root {
+        --space-lg: 1.25rem;
+        --space-xl: 1.75rem;
+    }
+
     h1 {
-        font-size: 2rem;
+        font-size: 1.75rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    h3 {
+        font-size: 1.25rem;
     }
 
     .card.metric-card .metric-value {
@@ -625,27 +662,198 @@ h3 {
     }
 
     .nav-link {
-        padding: 0.5rem !important;
+        padding: 0.75rem !important;
+        font-size: 0.95rem;
     }
 
-    .container {
+    .container,
+    .container-fluid {
         padding: 0 var(--space-md);
     }
 
     .btn {
         font-size: 0.85rem;
-        padding: 0.5rem 1rem;
+        padding: 0.625rem 1rem;
+        width: 100%;
+        justify-content: center;
     }
-}
 
-@media (max-width: 576px) {
-    .card.metric-card {
-        min-height: 140px;
+    .btn-sm {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        width: auto;
+    }
+
+    /* Cards responsivos */
+    .card {
+        margin-bottom: var(--space-md);
+    }
+
+    .card-header {
         padding: var(--space-md);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
     }
 
     .card-body {
         padding: var(--space-md);
+    }
+
+    /* Tabelas responsivas */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: var(--radius-sm);
+    }
+
+    .table {
+        font-size: 0.85rem;
+        min-width: 600px;
+    }
+
+    .table thead th,
+    .table tbody td {
+        padding: var(--space-sm);
+        white-space: nowrap;
+    }
+
+    /* Formulários mobile */
+    .form-control,
+    .form-select {
+        font-size: 1rem; /* Previne zoom no iOS */
+    }
+
+    /* Flex containers */
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: var(--space-sm);
+        align-items: stretch !important;
+    }
+
+    .d-flex.justify-content-between > * {
+        width: 100%;
+    }
+
+    /* Badges */
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    /* Alerts */
+    .alert {
+        padding: var(--space-sm);
+        font-size: 0.9rem;
+    }
+}
+
+/* Mobile pequeno */
+@media (max-width: 576px) {
+    :root {
+        --space-md: 1rem;
+        --space-lg: 1rem;
+        --space-xl: 1.5rem;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    h2 {
+        font-size: 1.35rem;
+    }
+
+    .card.metric-card {
+        min-height: 120px;
+        padding: var(--space-md);
+    }
+
+    .card.metric-card .metric-value {
+        font-size: 1.5rem;
+    }
+
+    .card-body {
+        padding: var(--space-sm);
+    }
+
+    .btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn-group .btn {
+        border-radius: var(--radius-sm) !important;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Colunas empilham em mobile */
+    .row > [class*='col-'] {
+        margin-bottom: var(--space-sm);
+    }
+
+    /* Tabelas em modo card no mobile */
+    .table.table-mobile-cards {
+        display: block;
+        min-width: auto;
+    }
+
+    .table.table-mobile-cards thead {
+        display: none;
+    }
+
+    .table.table-mobile-cards tbody,
+    .table.table-mobile-cards tr,
+    .table.table-mobile-cards td {
+        display: block;
+        width: 100%;
+    }
+
+    .table.table-mobile-cards tr {
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid var(--color-border-light);
+        border-radius: var(--radius-sm);
+        margin-bottom: var(--space-sm);
+        padding: var(--space-sm);
+    }
+
+    .table.table-mobile-cards td {
+        border: none;
+        padding: 0.5rem 0;
+        text-align: left !important;
+        position: relative;
+        padding-left: 45%;
+    }
+
+    .table.table-mobile-cards td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        font-size: 0.85rem;
+    }
+
+    /* Esconder elementos em mobile */
+    .hide-mobile {
+        display: none !important;
+    }
+
+    /* Navbar ajustes */
+    .navbar-brand i {
+        font-size: 1.25rem;
+    }
+
+    /* Formulários */
+    .form-group,
+    .mb-3,
+    .mb-4 {
+        margin-bottom: var(--space-md) !important;
     }
 }
 

@@ -65,3 +65,18 @@ node_modules/
 
 # Migration scripts (development only)
 migrate_*.py
+
+# Test and debug scripts
+testar_*.py
+verificar_*.py
+limpar_*.py
+
+# Backups
+*.tar.gz
+*.zip
+backup_*/
+backups/
+
+# Deploy
+deploy_*.tar.gz
+temp_deploy/

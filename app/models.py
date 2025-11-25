@@ -122,6 +122,8 @@ class CartaoCredito(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     bandeira = db.Column(db.String(50))  # Visa, Mastercard, etc
+    banco_emissor = db.Column(db.String(100))  # Banco que emitiu o cartão
+    numero_cartao = db.Column(db.String(4))  # Últimos 4 dígitos do cartão
     limite = db.Column(db.Numeric(10, 2), nullable=False)
     limite_utilizado = db.Column(db.Numeric(10, 2), default=0.00)
     dia_fechamento = db.Column(db.Integer, nullable=False)  # 1-31
@@ -165,3 +167,70 @@ class Fatura(db.Model):
 
     def __repr__(self):
         return f'<Fatura {self.mes_referencia}/{self.ano_referencia} - {self.cartao.nome}>'
+
+
+class ConciliacaoBancaria(db.Model):
+    """Modelo para conciliações bancárias"""
+    __tablename__ = 'conciliacoes_bancarias'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    conta_id = db.Column(db.Integer, db.ForeignKey('contas.id'), nullable=False)
+
+    # Informações do arquivo
+    arquivo_nome = db.Column(db.String(200), nullable=False)
+    formato = db.Column(db.String(10), nullable=False)  # OFX, CSV
+
+    # Status e estatísticas
+    data_upload = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='processando')  # processando, pendente_revisao, concluida, erro
+    total_linhas = db.Column(db.Integer, default=0)
+    linhas_conciliadas = db.Column(db.Integer, default=0)
+    linhas_importadas = db.Column(db.Integer, default=0)
+
+    # Data range do arquivo
+    data_inicio = db.Column(db.Date, nullable=True)
+    data_fim = db.Column(db.Date, nullable=True)
+
+    # Relacionamentos
+    usuario = db.relationship('User', backref='conciliacoes')
+    conta = db.relationship('Conta', backref='conciliacoes')
+    itens = db.relationship('ItemConciliacao', backref='conciliacao', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<ConciliacaoBancaria {self.arquivo_nome} - {self.conta.nome}>'
+
+
+class ItemConciliacao(db.Model):
+    """Modelo para itens individuais de uma conciliação"""
+    __tablename__ = 'itens_conciliacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conciliacao_id = db.Column(db.Integer, db.ForeignKey('conciliacoes_bancarias.id'), nullable=False)
+
+    # Dados do item do extrato
+    data = db.Column(db.Date, nullable=False)
+    descricao = db.Column(db.String(500), nullable=False)
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False)  # receita, despesa
+
+    # Dados extras do arquivo
+    numero_documento = db.Column(db.String(100), nullable=True)
+    saldo_apos = db.Column(db.Numeric(10, 2), nullable=True)
+
+    # Status de conciliação
+    status = db.Column(db.String(20), default='pendente')  # pendente, conciliado, importado, ignorado
+    transacao_id = db.Column(db.Integer, db.ForeignKey('transacoes.id'), nullable=True)  # Se foi conciliado com transação existente
+    categoria_sugerida_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
+
+    # Score de matching (0-100)
+    score_matching = db.Column(db.Integer, nullable=True)
+
+    data_processamento = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamentos
+    transacao = db.relationship('Transacao', backref='itens_conciliacao')
+    categoria_sugerida = db.relationship('Categoria', backref='itens_conciliacao_sugeridos')
+
+    def __repr__(self):
+        return f'<ItemConciliacao {self.descricao} - R$ {self.valor}>'
