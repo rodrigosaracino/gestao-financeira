@@ -70,7 +70,7 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-graph-up"></i> Projeção de Fluxo de Caixa - {{ mes_filtro }}/{{ ano_filtro }}</h5>
+                <h5><i class="bi bi-graph-up"></i> Fluxo de Caixa - {{ mes_filtro }}/{{ ano_filtro }}</h5>
             </div>
             <div class="card-body">
                 <div id="fluxoCaixaChart" style="width: 100%; height: 450px;"></div>
@@ -424,62 +424,32 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #8b98a5;">Nenhum dado disponível para exibir o gráfico</div>';
             return;
         }
-    // Separar dados em passado e futuro
-    var diasPassado = [];
-    var saldosPassado = [];
-    var diasFuturo = [];
-    var saldosFuturo = [];
-
-    var hoje = new Date().toISOString().split('T')[0];
+    // Extrair dados para o gráfico
+    var dias = [];
+    var receitas = [];
+    var despesas = [];
+    var saldos = [];
 
     projecaoData.forEach(function(item) {
-        if (item.is_futuro) {
-            diasFuturo.push(item.dia);
-            saldosFuturo.push(item.saldo);
-        } else {
-            diasPassado.push(item.dia);
-            saldosPassado.push(item.saldo);
-        }
+        dias.push(item.dia);
+        receitas.push(item.receitas);
+        despesas.push(item.despesas);
+        saldos.push(item.saldo);
     });
-
-    // Adicionar o último ponto do passado ao futuro para conectar as linhas
-    if (diasPassado.length > 0 && diasFuturo.length > 0) {
-        diasFuturo.unshift(diasPassado[diasPassado.length - 1]);
-        saldosFuturo.unshift(saldosPassado[saldosPassado.length - 1]);
-    }
-
-    // Se não há dados de passado, usar todos os dados como futuro
-    if (diasPassado.length === 0 && projecaoData.length > 0) {
-        projecaoData.forEach(function(item) {
-            diasFuturo.push(item.dia);
-            saldosFuturo.push(item.saldo);
-        });
-    }
-
-    // Se não há dados de futuro, usar todos os dados como passado
-    if (diasFuturo.length === 0 && projecaoData.length > 0 && diasPassado.length === 0) {
-        projecaoData.forEach(function(item) {
-            diasPassado.push(item.dia);
-            saldosPassado.push(item.saldo);
-        });
-    }
 
     // Preparar traces
     var data = [];
 
-    // Linha de referência no zero (apenas se há dados)
-    if (diasPassado.length > 0 || diasFuturo.length > 0) {
-        var primeiroDia = diasPassado.length > 0 ? diasPassado[0] : diasFuturo[0];
-        var ultimoDia = diasFuturo.length > 0 ? diasFuturo[diasFuturo.length - 1] : diasPassado[diasPassado.length - 1];
-
+    // Linha de referência no zero
+    if (dias.length > 0) {
         var traceZero = {
-            x: [primeiroDia, ultimoDia],
+            x: [dias[0], dias[dias.length - 1]],
             y: [0, 0],
             type: 'scatter',
             mode: 'lines',
-            name: 'Saldo Zero',
+            name: 'Linha Zero',
             line: {
-                color: '#ff3b57',
+                color: '#8b98a5',
                 width: 1,
                 dash: 'dash'
             },
@@ -489,49 +459,62 @@ document.addEventListener('DOMContentLoaded', function() {
         data.push(traceZero);
     }
 
-    // Trace do passado (saldo realizado)
-    if (diasPassado.length > 0) {
-        var tracePassado = {
-            x: diasPassado,
-            y: saldosPassado,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'Saldo Realizado',
-            line: {
-                color: '#0066ff',
-                width: 3
-            },
-            marker: {
-                color: '#0066ff',
-                size: 6
-            },
-            hovertemplate: '<b>Dia %{x}</b><br>Saldo: R$ %{y:.2f}<extra></extra>'
-        };
-        data.push(tracePassado);
-    }
+    // Trace de Receitas
+    var traceReceitas = {
+        x: dias,
+        y: receitas,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Recebimentos',
+        line: {
+            color: '#10b981',
+            width: 2
+        },
+        marker: {
+            color: '#10b981',
+            size: 5
+        },
+        hovertemplate: '<b>Dia %{x}</b><br>Recebimentos: R$ %{y:.2f}<extra></extra>'
+    };
+    data.push(traceReceitas);
 
-    // Trace do futuro (projeção)
-    if (diasFuturo.length > 0) {
-        var traceFuturo = {
-            x: diasFuturo,
-            y: saldosFuturo,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'Projeção',
-            line: {
-                color: '#8b98a5',
-                width: 2,
-                dash: 'dot'
-            },
-            marker: {
-                color: '#8b98a5',
-                size: 5,
-                opacity: 0.7
-            },
-            hovertemplate: '<b>Dia %{x}</b><br>Projeção: R$ %{y:.2f}<extra></extra>'
-        };
-        data.push(traceFuturo);
-    }
+    // Trace de Despesas
+    var traceDespesas = {
+        x: dias,
+        y: despesas,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Despesas',
+        line: {
+            color: '#ff3b57',
+            width: 2
+        },
+        marker: {
+            color: '#ff3b57',
+            size: 5
+        },
+        hovertemplate: '<b>Dia %{x}</b><br>Despesas: R$ %{y:.2f}<extra></extra>'
+    };
+    data.push(traceDespesas);
+
+    // Trace de Saldo
+    var traceSaldo = {
+        x: dias,
+        y: saldos,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Saldo',
+        line: {
+            color: '#0066ff',
+            width: 3
+        },
+        marker: {
+            color: '#0066ff',
+            size: 6
+        },
+        hovertemplate: '<b>Dia %{x}</b><br>Saldo: R$ %{y:.2f}<extra></extra>'
+    };
+    data.push(traceSaldo);
 
     var layout = {
         font: {
@@ -554,7 +537,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         yaxis: {
             title: {
-                text: 'Saldo (R$)',
+                text: 'Valor (R$)',
                 font: {
                     size: 13,
                     weight: 600
@@ -563,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showgrid: true,
             gridcolor: 'rgba(0, 0, 0, 0.06)',
             zeroline: true,
-            zerolinecolor: '#ff3b57',
+            zerolinecolor: '#8b98a5',
             zerolinewidth: 1
         },
         plot_bgcolor: 'rgba(255, 255, 255, 0.5)',

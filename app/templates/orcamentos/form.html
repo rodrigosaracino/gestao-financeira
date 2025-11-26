@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}{% if orcamento %}Editar{% else %}Novo{% endif %} Orçamento - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-calculator"></i>
+                        {% if orcamento %}Editar Orçamento{% else %}Novo Orçamento{% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="categoria_id" class="form-label">Categoria *</label>
+                            <select class="form-select" id="categoria_id" name="categoria_id" required
+                                    {% if orcamento %}disabled{% endif %}>
+                                <option value="">Selecione uma categoria</option>
+                                {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}"
+                                        {% if orcamento and orcamento.categoria_id == categoria.id %}selected{% endif %}>
+                                    {{ categoria.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if orcamento %}
+                            <input type="hidden" name="categoria_id" value="{{ orcamento.categoria_id }}">
+                            {% endif %}
+                        </div>
+
+                        {% if not orcamento %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="mes" class="form-label">Mês *</label>
+                                    <select class="form-select" id="mes" name="mes" required>
+                                        {% for i in range(1, 13) %}
+                                        <option value="{{ i }}" {% if mes_atual == i %}selected{% endif %}>
+                                            {{ ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                                                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][i-1] }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="ano" class="form-label">Ano *</label>
+                                    <input type="number" class="form-control" id="ano" name="ano"
+                                           value="{{ ano_atual }}" min="2020" max="2100" required>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label for="valor_limite" class="form-label">Valor Limite *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="valor_limite" name="valor_limite"
+                                       step="0.01" min="0.01" required
+                                       value="{% if orcamento %}{{ orcamento.valor_limite }}{% endif %}">
+                            </div>
+                            <small class="form-text text-muted">Valor máximo para gastar nesta categoria no mês</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="alerta_em_percentual" class="form-label">
+                                Alertar ao atingir (%)
+                            </label>
+                            <input type="number" class="form-control" id="alerta_em_percentual"
+                                   name="alerta_em_percentual" min="1" max="100"
+                                   value="{% if orcamento %}{{ orcamento.alerta_em_percentual }}{% else %}80{% endif %}">
+                            <small class="form-text text-muted">
+                                Você será alertado quando atingir este percentual do orçamento
+                            </small>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('main.listar_orcamentos') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -234,3 +234,144 @@ class ItemConciliacao(db.Model):
 
     def __repr__(self):
         return f'<ItemConciliacao {self.descricao} - R$ {self.valor}>'
+
+
+class Orcamento(db.Model):
+    """Modelo para orçamentos mensais por categoria"""
+    __tablename__ = 'orcamentos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=False)
+
+    # Período
+    mes = db.Column(db.Integer, nullable=False)  # 1-12
+    ano = db.Column(db.Integer, nullable=False)  # 2024, 2025...
+
+    # Valor limite
+    valor_limite = db.Column(db.Numeric(10, 2), nullable=False)
+
+    # Alertas
+    alerta_em_percentual = db.Column(db.Integer, default=80)  # Avisar ao atingir 80%
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    usuario = db.relationship('User', backref='orcamentos')
+    categoria = db.relationship('Categoria')
+
+    def valor_gasto(self):
+        """Calcula quanto já foi gasto nesta categoria no período"""
+        from sqlalchemy import extract, func
+
+        total = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
+            Transacao.categoria_id == self.categoria_id,
+            Conta.user_id == self.user_id,
+            Transacao.tipo == 'despesa',
+            extract('month', Transacao.data) == self.mes,
+            extract('year', Transacao.data) == self.ano
+        ).scalar()
+
+        return total or 0
+
+    def percentual_gasto(self):
+        """Retorna percentual gasto do orçamento (0-100)"""
+        if self.valor_limite == 0:
+            return 0
+        return float((self.valor_gasto() / self.valor_limite) * 100)
+
+    def esta_no_limite(self):
+        """Verifica se atingiu o alerta"""
+        return self.percentual_gasto() >= self.alerta_em_percentual
+
+    def saldo_restante(self):
+        """Retorna o saldo restante do orçamento"""
+        return self.valor_limite - self.valor_gasto()
+
+    def __repr__(self):
+        return f'<Orcamento {self.categoria.nome} - {self.mes}/{self.ano}>'
+
+
+class Meta(db.Model):
+    """Modelo para metas de economia"""
+    __tablename__ = 'metas'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Detalhes
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+
+    # Valores
+    valor_alvo = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_inicial = db.Column(db.Numeric(10, 2), default=0)
+    valor_mensal = db.Column(db.Numeric(10, 2))  # Quanto guardar por mês
+
+    # Prazos
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    data_conclusao = db.Column(db.Date, nullable=True)
+
+    # Status
+    status = db.Column(db.String(20), default='ativa')  # ativa, concluida, cancelada
+
+    # Conta vinculada (onde o dinheiro está guardado)
+    conta_id = db.Column(db.Integer, db.ForeignKey('contas.id'), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    usuario = db.relationship('User', backref='metas')
+    conta = db.relationship('Conta')
+    depositos = db.relationship('DepositoMeta', backref='meta', cascade='all, delete-orphan')
+
+    def valor_acumulado(self):
+        """Valor total acumulado na meta"""
+        from decimal import Decimal
+        total_depositos = sum(d.valor for d in self.depositos)
+        return Decimal(str(self.valor_inicial)) + Decimal(str(total_depositos))
+
+    def percentual_concluido(self):
+        """Percentual da meta concluído (0-100)"""
+        if self.valor_alvo == 0:
+            return 0
+        return float((self.valor_acumulado() / self.valor_alvo) * 100)
+
+    def meses_restantes(self):
+        """Quantidade de meses até o prazo"""
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+
+        hoje = date.today()
+        if hoje >= self.data_fim:
+            return 0
+
+        delta = relativedelta(self.data_fim, hoje)
+        return delta.years * 12 + delta.months
+
+    def saldo_faltante(self):
+        """Retorna quanto ainda falta para atingir a meta"""
+        return self.valor_alvo - self.valor_acumulado()
+
+    def __repr__(self):
+        return f'<Meta {self.titulo}>'
+
+
+class DepositoMeta(db.Model):
+    """Modelo para depósitos realizados em uma meta"""
+    __tablename__ = 'depositos_meta'
+
+    id = db.Column(db.Integer, primary_key=True)
+    meta_id = db.Column(db.Integer, db.ForeignKey('metas.id'), nullable=False)
+
+    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    data = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    observacao = db.Column(db.String(200))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<DepositoMeta R$ {self.valor} - {self.data}>'

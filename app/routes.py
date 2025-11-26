@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
-from app.models import db, Conta, Categoria, Transacao, CartaoCredito, Fatura, ConciliacaoBancaria, ItemConciliacao
+from app.models import db, Conta, Categoria, Transacao, CartaoCredito, Fatura, ConciliacaoBancaria, ItemConciliacao, Orcamento, Meta, DepositoMeta
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy import func, extract
@@ -72,6 +72,9 @@ def index():
     # Gerar dados para cada dia do mês
     dia_atual = primeiro_dia
     while dia_atual <= ultimo_dia:
+        receitas_dia = 0.0
+        despesas_dia = 0.0
+
         if dia_atual in transacoes_por_dia:
             receitas_dia = float(transacoes_por_dia[dia_atual]['receitas'])
             despesas_dia = float(transacoes_por_dia[dia_atual]['despesas'])
@@ -81,6 +84,8 @@ def index():
             'data': dia_atual.strftime('%Y-%m-%d'),
             'dia': dia_atual.day,
             'saldo': round(saldo_acumulado, 2),
+            'receitas': round(receitas_dia, 2),
+            'despesas': round(despesas_dia, 2),
             'is_hoje': dia_atual == hoje,
             'is_futuro': dia_atual > hoje
         })
@@ -1432,3 +1437,399 @@ def conciliacao_excluir(id):
         flash(f'Erro ao excluir conciliação: {str(e)}', 'danger')
 
     return redirect(url_for('main.conciliacao_lista'))
+
+
+# ==================== ORÇAMENTOS ====================
+
+@bp.route('/orcamentos')
+@login_required
+def listar_orcamentos():
+    """Lista orçamentos do mês atual"""
+    mes = request.args.get('mes', type=int) or datetime.now().month
+    ano = request.args.get('ano', type=int) or datetime.now().year
+
+    # Calcular mês anterior e próximo para navegação
+    if mes == 1:
+        mes_anterior = 12
+        ano_anterior = ano - 1
+    else:
+        mes_anterior = mes - 1
+        ano_anterior = ano
+
+    if mes == 12:
+        mes_proximo = 1
+        ano_proximo = ano + 1
+    else:
+        mes_proximo = mes + 1
+        ano_proximo = ano
+
+    # Buscar orçamentos do mês
+    orcamentos = Orcamento.query.filter_by(
+        user_id=current_user.id,
+        mes=mes,
+        ano=ano
+    ).all()
+
+    # Buscar categorias de despesa sem orçamento neste mês
+    categorias_com_orcamento = [o.categoria_id for o in orcamentos]
+    categorias_sem_orcamento = Categoria.query.filter(
+        Categoria.user_id == current_user.id,
+        Categoria.tipo == 'despesa',
+        ~Categoria.id.in_(categorias_com_orcamento)
+    ).all()
+
+    # Calcular total orçado e total gasto
+    total_orcado = sum(o.valor_limite for o in orcamentos)
+    total_gasto = sum(o.valor_gasto() for o in orcamentos)
+
+    # Nome do mês em português
+    meses_pt = {
+        1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
+        5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
+        9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+    }
+
+    return render_template('orcamentos/listar.html',
+                         orcamentos=orcamentos,
+                         categorias_sem_orcamento=categorias_sem_orcamento,
+                         mes=mes,
+                         ano=ano,
+                         mes_anterior=mes_anterior,
+                         ano_anterior=ano_anterior,
+                         mes_proximo=mes_proximo,
+                         ano_proximo=ano_proximo,
+                         nome_mes=meses_pt[mes],
+                         total_orcado=total_orcado,
+                         total_gasto=total_gasto)
+
+
+@bp.route('/orcamentos/novo', methods=['GET', 'POST'])
+@login_required
+def novo_orcamento():
+    """Criar novo orçamento"""
+    if request.method == 'POST':
+        categoria_id = int(request.form['categoria_id'])
+        mes = int(request.form['mes'])
+        ano = int(request.form['ano'])
+        valor_limite = Decimal(request.form['valor_limite'])
+        alerta_em_percentual = int(request.form.get('alerta_em_percentual', 80))
+
+        # Verificar se já existe orçamento para esta categoria neste mês
+        orcamento_existente = Orcamento.query.filter_by(
+            user_id=current_user.id,
+            categoria_id=categoria_id,
+            mes=mes,
+            ano=ano
+        ).first()
+
+        if orcamento_existente:
+            flash('Já existe um orçamento para esta categoria neste mês!', 'error')
+            return redirect(url_for('main.novo_orcamento'))
+
+        orcamento = Orcamento(
+            user_id=current_user.id,
+            categoria_id=categoria_id,
+            mes=mes,
+            ano=ano,
+            valor_limite=valor_limite,
+            alerta_em_percentual=alerta_em_percentual
+        )
+        db.session.add(orcamento)
+        db.session.commit()
+        flash('Orçamento criado com sucesso!', 'success')
+        return redirect(url_for('main.listar_orcamentos', mes=mes, ano=ano))
+
+    # Buscar categorias de despesa
+    categorias = Categoria.query.filter_by(
+        user_id=current_user.id,
+        tipo='despesa'
+    ).order_by(Categoria.nome).all()
+
+    mes_atual = datetime.now().month
+    ano_atual = datetime.now().year
+
+    return render_template('orcamentos/form.html',
+                         categorias=categorias,
+                         mes_atual=mes_atual,
+                         ano_atual=ano_atual)
+
+
+@bp.route('/orcamentos/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_orcamento(id):
+    """Editar orçamento existente"""
+    orcamento = Orcamento.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    if request.method == 'POST':
+        orcamento.valor_limite = Decimal(request.form['valor_limite'])
+        orcamento.alerta_em_percentual = int(request.form.get('alerta_em_percentual', 80))
+        db.session.commit()
+        flash('Orçamento atualizado com sucesso!', 'success')
+        return redirect(url_for('main.listar_orcamentos', mes=orcamento.mes, ano=orcamento.ano))
+
+    categorias = Categoria.query.filter_by(
+        user_id=current_user.id,
+        tipo='despesa'
+    ).order_by(Categoria.nome).all()
+
+    return render_template('orcamentos/form.html',
+                         orcamento=orcamento,
+                         categorias=categorias)
+
+
+@bp.route('/orcamentos/<int:id>/deletar', methods=['POST'])
+@login_required
+def deletar_orcamento(id):
+    """Deletar um orçamento"""
+    orcamento = Orcamento.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    mes = orcamento.mes
+    ano = orcamento.ano
+
+    db.session.delete(orcamento)
+    db.session.commit()
+    flash('Orçamento deletado com sucesso!', 'success')
+    return redirect(url_for('main.listar_orcamentos', mes=mes, ano=ano))
+
+
+# ==================== METAS ====================
+
+@bp.route('/metas')
+@login_required
+def listar_metas():
+    """Lista todas as metas"""
+    # Buscar metas ativas
+    metas_ativas = Meta.query.filter_by(
+        user_id=current_user.id,
+        status='ativa'
+    ).order_by(Meta.data_fim).all()
+
+    # Buscar metas concluídas (últimas 5)
+    metas_concluidas = Meta.query.filter_by(
+        user_id=current_user.id,
+        status='concluida'
+    ).order_by(Meta.data_conclusao.desc()).limit(5).all()
+
+    # Calcular totais
+    total_economizado = sum(m.valor_acumulado() for m in metas_ativas)
+    total_metas = sum(m.valor_alvo for m in metas_ativas)
+
+    return render_template('metas/listar.html',
+                         metas_ativas=metas_ativas,
+                         metas_concluidas=metas_concluidas,
+                         total_economizado=total_economizado,
+                         total_metas=total_metas)
+
+
+@bp.route('/metas/nova', methods=['GET', 'POST'])
+@login_required
+def nova_meta():
+    """Criar nova meta"""
+    if request.method == 'POST':
+        titulo = request.form['titulo']
+        descricao = request.form.get('descricao', '')
+        valor_alvo = Decimal(request.form['valor_alvo'])
+        valor_inicial = Decimal(request.form.get('valor_inicial', 0))
+        valor_mensal = Decimal(request.form.get('valor_mensal', 0))
+        data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
+        data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
+        conta_id = request.form.get('conta_id')
+
+        if data_fim <= data_inicio:
+            flash('A data fim deve ser posterior à data de início!', 'error')
+            return redirect(url_for('main.nova_meta'))
+
+        meta = Meta(
+            user_id=current_user.id,
+            titulo=titulo,
+            descricao=descricao,
+            valor_alvo=valor_alvo,
+            valor_inicial=valor_inicial,
+            valor_mensal=valor_mensal,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            conta_id=conta_id if conta_id else None,
+            status='ativa'
+        )
+        db.session.add(meta)
+        db.session.commit()
+        flash('Meta criada com sucesso!', 'success')
+        return redirect(url_for('main.listar_metas'))
+
+    contas = Conta.query.filter_by(
+        user_id=current_user.id,
+        ativa=True
+    ).all()
+
+    data_hoje = date.today().strftime('%Y-%m-%d')
+
+    return render_template('metas/form.html',
+                         contas=contas,
+                         data_hoje=data_hoje)
+
+
+@bp.route('/metas/<int:id>')
+@login_required
+def ver_meta(id):
+    """Ver detalhes de uma meta"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    # Buscar depósitos ordenados por data
+    depositos = DepositoMeta.query.filter_by(
+        meta_id=meta.id
+    ).order_by(DepositoMeta.data.desc()).all()
+
+    return render_template('metas/detalhes.html',
+                         meta=meta,
+                         depositos=depositos)
+
+
+@bp.route('/metas/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_meta(id):
+    """Editar meta existente"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    if request.method == 'POST':
+        meta.titulo = request.form['titulo']
+        meta.descricao = request.form.get('descricao', '')
+        meta.valor_alvo = Decimal(request.form['valor_alvo'])
+        meta.valor_inicial = Decimal(request.form.get('valor_inicial', 0))
+        meta.valor_mensal = Decimal(request.form.get('valor_mensal', 0))
+        meta.data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
+        meta.data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
+        conta_id = request.form.get('conta_id')
+        meta.conta_id = conta_id if conta_id else None
+
+        db.session.commit()
+        flash('Meta atualizada com sucesso!', 'success')
+        return redirect(url_for('main.ver_meta', id=meta.id))
+
+    contas = Conta.query.filter_by(
+        user_id=current_user.id,
+        ativa=True
+    ).all()
+
+    return render_template('metas/form.html',
+                         meta=meta,
+                         contas=contas)
+
+
+@bp.route('/metas/<int:id>/deletar', methods=['POST'])
+@login_required
+def deletar_meta(id):
+    """Deletar uma meta"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    db.session.delete(meta)
+    db.session.commit()
+    flash('Meta deletada com sucesso!', 'success')
+    return redirect(url_for('main.listar_metas'))
+
+
+@bp.route('/metas/<int:id>/deposito', methods=['POST'])
+@login_required
+def adicionar_deposito(id):
+    """Adicionar depósito a uma meta"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    valor = Decimal(request.form['valor'])
+    data = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
+    observacao = request.form.get('observacao', '')
+
+    if valor <= 0:
+        flash('O valor deve ser maior que zero!', 'error')
+        return redirect(url_for('main.ver_meta', id=id))
+
+    deposito = DepositoMeta(
+        meta_id=meta.id,
+        valor=valor,
+        data=data,
+        observacao=observacao
+    )
+    db.session.add(deposito)
+
+    # Verificar se a meta foi concluída
+    if meta.valor_acumulado() + valor >= meta.valor_alvo:
+        meta.status = 'concluida'
+        meta.data_conclusao = date.today()
+        flash('Parabéns! Meta concluída!', 'success')
+    else:
+        flash('Depósito adicionado com sucesso!', 'success')
+
+    db.session.commit()
+    return redirect(url_for('main.ver_meta', id=id))
+
+
+@bp.route('/metas/<int:meta_id>/deposito/<int:deposito_id>/deletar', methods=['POST'])
+@login_required
+def deletar_deposito(meta_id, deposito_id):
+    """Deletar um depósito"""
+    meta = Meta.query.filter_by(
+        id=meta_id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    deposito = DepositoMeta.query.filter_by(
+        id=deposito_id,
+        meta_id=meta_id
+    ).first_or_404()
+
+    # Se a meta estava concluída, reverter status
+    if meta.status == 'concluida':
+        meta.status = 'ativa'
+        meta.data_conclusao = None
+
+    db.session.delete(deposito)
+    db.session.commit()
+    flash('Depósito removido com sucesso!', 'success')
+    return redirect(url_for('main.ver_meta', id=meta_id))
+
+
+@bp.route('/metas/<int:id>/concluir', methods=['POST'])
+@login_required
+def concluir_meta(id):
+    """Marcar meta como concluída manualmente"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    meta.status = 'concluida'
+    meta.data_conclusao = date.today()
+    db.session.commit()
+    flash('Meta marcada como concluída!', 'success')
+    return redirect(url_for('main.listar_metas'))
+
+
+@bp.route('/metas/<int:id>/cancelar', methods=['POST'])
+@login_required
+def cancelar_meta(id):
+    """Cancelar uma meta"""
+    meta = Meta.query.filter_by(
+        id=id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    meta.status = 'cancelada'
+    db.session.commit()
+    flash('Meta cancelada!', 'info')
+    return redirect(url_for('main.listar_metas'))

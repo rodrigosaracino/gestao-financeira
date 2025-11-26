@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Metas de Economia - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="bi bi-trophy"></i> Metas de Economia</h2>
+            <p class="text-muted">Estabeleça e acompanhe suas metas financeiras</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('main.nova_meta') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Nova Meta
+            </a>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Total Economizado</h6>
+                    <h3 class="text-success">R$ {{ "%.2f"|format(total_economizado) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Total de Metas</h6>
+                    <h3 class="text-primary">R$ {{ "%.2f"|format(total_metas) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metas Ativas -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Metas Ativas</h5>
+        </div>
+        <div class="card-body">
+            {% if metas_ativas %}
+            <div class="row">
+                {% for meta in metas_ativas %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ meta.titulo }}</h5>
+                            {% if meta.descricao %}
+                            <p class="card-text text-muted">{{ meta.descricao }}</p>
+                            {% endif %}
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Progresso</span>
+                                    <strong>{{ "%.1f"|format(meta.percentual_concluido()) }}%</strong>
+                                </div>
+                                <div class="progress" style="height: 25px;">
+                                    {% set percentual = meta.percentual_concluido() %}
+                                    {% if percentual >= 100 %}
+                                        {% set cor_progress = 'bg-success' %}
+                                    {% elif percentual >= 75 %}
+                                        {% set cor_progress = 'bg-info' %}
+                                    {% elif percentual >= 50 %}
+                                        {% set cor_progress = 'bg-warning' %}
+                                    {% else %}
+                                        {% set cor_progress = 'bg-secondary' %}
+                                    {% endif %}
+                                    <div class="progress-bar {{ cor_progress }}"
+                                         style="width: {% if percentual > 100 %}100{% else %}{{ percentual }}{% endif %}%;">
+                                        {{ "%.0f"|format(percentual) }}%
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row text-center mb-3">
+                                <div class="col-6">
+                                    <small class="text-muted">Acumulado</small>
+                                    <p class="mb-0 fw-bold text-success">R$ {{ "%.2f"|format(meta.valor_acumulado()) }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Meta</small>
+                                    <p class="mb-0 fw-bold">R$ {{ "%.2f"|format(meta.valor_alvo) }}</p>
+                                </div>
+                            </div>
+
+                            <div class="row text-center mb-3">
+                                <div class="col-6">
+                                    <small class="text-muted">Falta</small>
+                                    <p class="mb-0">R$ {{ "%.2f"|format(meta.saldo_faltante()) }}</p>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Prazo</small>
+                                    <p class="mb-0">{{ meta.meses_restantes() }} meses</p>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <a href="{{ url_for('main.ver_meta', id=meta.id) }}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-eye"></i> Ver Detalhes
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Você não possui metas ativas no momento.
+                <a href="{{ url_for('main.nova_meta') }}">Criar primeira meta</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Metas Concluídas -->
+    {% if metas_concluidas %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Metas Concluídas Recentes</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Meta</th>
+                            <th>Valor</th>
+                            <th>Concluída em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for meta in metas_concluidas %}
+                        <tr>
+                            <td>
+                                <i class="bi bi-check-circle text-success"></i>
+                                {{ meta.titulo }}
+                            </td>
+                            <td>R$ {{ "%.2f"|format(meta.valor_alvo) }}</td>
+                            <td>{{ meta.data_conclusao.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

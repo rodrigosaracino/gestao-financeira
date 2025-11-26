@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}{{ meta.titulo }} - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="bi bi-trophy"></i> {{ meta.titulo }}</h2>
+            {% if meta.descricao %}
+            <p class="text-muted">{{ meta.descricao }}</p>
+            {% endif %}
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('main.listar_metas') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Progresso da Meta -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row text-center mb-4">
+                <div class="col-md-3">
+                    <h6 class="text-muted">Acumulado</h6>
+                    <h3 class="text-success">R$ {{ "%.2f"|format(meta.valor_acumulado()) }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted">Meta</h6>
+                    <h3 class="text-primary">R$ {{ "%.2f"|format(meta.valor_alvo) }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted">Falta</h6>
+                    <h3>R$ {{ "%.2f"|format(meta.saldo_faltante()) }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted">Progresso</h6>
+                    <h3>{{ "%.1f"|format(meta.percentual_concluido()) }}%</h3>
+                </div>
+            </div>
+
+            <div class="progress" style="height: 30px;">
+                {% set percentual = meta.percentual_concluido() %}
+                {% if percentual >= 100 %}
+                    {% set cor_progress = 'bg-success' %}
+                {% elif percentual >= 75 %}
+                    {% set cor_progress = 'bg-info' %}
+                {% elif percentual >= 50 %}
+                    {% set cor_progress = 'bg-warning' %}
+                {% else %}
+                    {% set cor_progress = 'bg-secondary' %}
+                {% endif %}
+                <div class="progress-bar {{ cor_progress }}"
+                     style="width: {% if percentual > 100 %}100{% else %}{{ percentual }}{% endif %}%;">
+                    {{ "%.1f"|format(percentual) }}%
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <p><strong>Data Início:</strong> {{ meta.data_inicio.strftime('%d/%m/%Y') }}</p>
+                    <p><strong>Data Limite:</strong> {{ meta.data_fim.strftime('%d/%m/%Y') }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Meses Restantes:</strong> {{ meta.meses_restantes() }}</p>
+                    {% if meta.conta %}
+                    <p><strong>Conta:</strong> {{ meta.conta.nome }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <a href="{{ url_for('main.editar_meta', id=meta.id) }}" class="btn btn-primary">
+                    <i class="bi bi-pencil"></i> Editar
+                </a>
+                {% if meta.status == 'ativa' %}
+                <form method="POST" action="{{ url_for('main.concluir_meta', id=meta.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Marcar como Concluída
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('main.cancelar_meta', id=meta.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-x-circle"></i> Cancelar Meta
+                    </button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('main.deletar_meta', id=meta.id) }}" style="display: inline;"
+                      onsubmit="return confirm('Tem certeza que deseja excluir esta meta?');">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Excluir
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Adicionar Depósito -->
+    {% if meta.status == 'ativa' %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Adicionar Depósito</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.adicionar_deposito', id=meta.id) }}">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="valor" class="form-label">Valor *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="valor" name="valor"
+                                       step="0.01" min="0.01" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="data" class="form-label">Data *</label>
+                            <input type="date" class="form-control" id="data" name="data"
+                                   value="{{ data_hoje }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="mb-3">
+                            <label for="observacao" class="form-label">Observação</label>
+                            <input type="text" class="form-control" id="observacao" name="observacao"
+                                   placeholder="Ex: Bônus do trabalho">
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-plus-circle"></i> Adicionar Depósito
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Histórico de Depósitos -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Histórico de Depósitos</h5>
+        </div>
+        <div class="card-body">
+            {% if depositos %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Valor</th>
+                            <th>Observação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for deposito in depositos %}
+                        <tr>
+                            <td>{{ deposito.data.strftime('%d/%m/%Y') }}</td>
+                            <td class="text-success fw-bold">R$ {{ "%.2f"|format(deposito.valor) }}</td>
+                            <td>{{ deposito.observacao }}</td>
+                            <td>
+                                <form method="POST"
+                                      action="{{ url_for('main.deletar_deposito', meta_id=meta.id, deposito_id=deposito.id) }}"
+                                      style="display: inline;"
+                                      onsubmit="return confirm('Tem certeza que deseja remover este depósito?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">Nenhum depósito realizado ainda.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Adicionar data_hoje para o formulário de depósito
+const data_hoje = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}

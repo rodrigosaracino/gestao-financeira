@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}{% if meta %}Editar{% else %}Nova{% endif %} Meta - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-trophy"></i>
+                        {% if meta %}Editar Meta{% else %}Nova Meta{% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="titulo" class="form-label">Título da Meta *</label>
+                            <input type="text" class="form-control" id="titulo" name="titulo"
+                                   value="{% if meta %}{{ meta.titulo }}{% endif %}" required
+                                   placeholder="Ex: Viagem para Europa, Reserva de Emergência">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="descricao" name="descricao" rows="3"
+                                      placeholder="Descreva sua meta...">{% if meta %}{{ meta.descricao }}{% endif %}</textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="valor_alvo" class="form-label">Valor Alvo *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" class="form-control" id="valor_alvo" name="valor_alvo"
+                                               step="0.01" min="0.01" required
+                                               value="{% if meta %}{{ meta.valor_alvo }}{% endif %}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="valor_inicial" class="form-label">Valor Inicial</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        <input type="number" class="form-control" id="valor_inicial" name="valor_inicial"
+                                               step="0.01" min="0" value="{% if meta %}{{ meta.valor_inicial }}{% else %}0{% endif %}">
+                                    </div>
+                                    <small class="form-text text-muted">Valor que você já possui para esta meta</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="valor_mensal" class="form-label">Valor Mensal Sugerido</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" class="form-control" id="valor_mensal" name="valor_mensal"
+                                       step="0.01" min="0" value="{% if meta %}{{ meta.valor_mensal }}{% else %}0{% endif %}">
+                            </div>
+                            <small class="form-text text-muted">Quanto você planeja economizar por mês</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="data_inicio" class="form-label">Data de Início *</label>
+                                    <input type="date" class="form-control" id="data_inicio" name="data_inicio" required
+                                           value="{% if meta %}{{ meta.data_inicio }}{% else %}{{ data_hoje }}{% endif %}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="data_fim" class="form-label">Data Limite *</label>
+                                    <input type="date" class="form-control" id="data_fim" name="data_fim" required
+                                           value="{% if meta %}{{ meta.data_fim }}{% endif %}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="conta_id" class="form-label">Conta Vinculada (opcional)</label>
+                            <select class="form-select" id="conta_id" name="conta_id">
+                                <option value="">Nenhuma</option>
+                                {% for conta in contas %}
+                                <option value="{{ conta.id }}"
+                                        {% if meta and meta.conta_id == conta.id %}selected{% endif %}>
+                                    {{ conta.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Conta onde o dinheiro da meta está guardado</small>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('main.listar_metas') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
