@@ -1184,6 +1184,354 @@ def api_fluxo_caixa():
     })
 
 
+@bp.route('/api/evolucao-patrimonial')
+@login_required
+def api_evolucao_patrimonial():
+    """API: Evolução patrimonial ao longo do tempo"""
+    periodo = request.args.get('periodo', 'ano')  # mes, ano, tudo
+
+    # Buscar todas as contas do usuário
+    contas = Conta.query.filter_by(user_id=current_user.id).all()
+    saldo_atual = sum(conta.saldo_atual for conta in contas)
+
+    # Calcular evolução baseada nas transações
+    if periodo == 'mes':
+        # Últimos 30 dias
+        inicio = date.today() - relativedelta(days=30)
+        agrupamento = extract('day', Transacao.data)
+    elif periodo == 'ano':
+        # Últimos 12 meses
+        inicio = date.today() - relativedelta(months=12)
+        agrupamento = extract('month', Transacao.data)
+    else:
+        # Todo o histórico
+        inicio = date(2020, 1, 1)
+        agrupamento = extract('month', Transacao.data)
+
+    # Buscar transações agrupadas
+    transacoes = db.session.query(
+        Transacao.data,
+        Transacao.tipo,
+        func.sum(Transacao.valor).label('total')
+    ).join(Conta).filter(
+        Conta.user_id == current_user.id,
+        Transacao.data >= inicio,
+        Transacao.pago == True
+    ).group_by(Transacao.data, Transacao.tipo).order_by(Transacao.data).all()
+
+    # Calcular patrimônio regressivamente
+    datas = []
+    valores = []
+    saldo_temp = float(saldo_atual)
+
+    # Criar dicionário de variações diárias
+    variacoes = defaultdict(float)
+    for t in reversed(transacoes):
+        data_str = t.data.strftime('%Y-%m-%d')
+        if t.tipo == 'receita':
+            variacoes[data_str] -= float(t.total)
+        else:
+            variacoes[data_str] += float(t.total)
+
+    # Gerar pontos do gráfico (do passado para o presente)
+    data_atual = inicio
+    while data_atual <= date.today():
+        data_str = data_atual.strftime('%Y-%m-%d')
+        if data_str in variacoes:
+            saldo_temp -= variacoes[data_str]
+        datas.append(data_str)
+        valores.append(round(saldo_temp, 2))
+        data_atual += relativedelta(days=1)
+        saldo_temp += variacoes.get(data_str, 0)
+
+    # Reverter para ordem correta
+    datas.reverse()
+    valores.reverse()
+
+    return jsonify({
+        'datas': datas,
+        'valores': valores,
+        'saldo_atual': float(saldo_atual)
+    })
+
+
+@bp.route('/api/analise-cartoes')
+@login_required
+def api_analise_cartoes():
+    """API: Análise de uso de cartões de crédito"""
+    cartoes = CartaoCredito.query.filter_by(user_id=current_user.id, ativo=True).all()
+
+    dados = []
+    for cartao in cartoes:
+        # Buscar faturas em aberto
+        faturas_abertas = Fatura.query.filter_by(
+            cartao_id=cartao.id,
+            status='aberta'
+        ).count()
+
+        # Calcular gasto médio mensal (últimos 6 meses)
+        seis_meses_atras = date.today() - relativedelta(months=6)
+        gasto_total = db.session.query(func.sum(Transacao.valor)).filter(
+            Transacao.cartao_credito_id == cartao.id,
+            Transacao.data >= seis_meses_atras
+        ).scalar() or 0
+
+        gasto_medio = float(gasto_total) / 6
+
+        dados.append({
+            'nome': cartao.nome,
+            'bandeira': cartao.bandeira,
+            'limite': float(cartao.limite),
+            'utilizado': float(cartao.limite_utilizado),
+            'disponivel': float(cartao.limite_disponivel()),
+            'percentual': round(cartao.percentual_utilizado(), 1),
+            'faturas_abertas': faturas_abertas,
+            'gasto_medio_mensal': round(gasto_medio, 2)
+        })
+
+    return jsonify({'cartoes': dados})
+
+
+@bp.route('/api/orcamentos-vs-realizado')
+@login_required
+def api_orcamentos_vs_realizado():
+    """API: Comparação entre orçamentos e gastos realizados"""
+    mes = request.args.get('mes', datetime.now().month, type=int)
+    ano = request.args.get('ano', datetime.now().year, type=int)
+
+    orcamentos = Orcamento.query.filter_by(
+        user_id=current_user.id,
+        mes=mes,
+        ano=ano
+    ).all()
+
+    dados = []
+    for orc in orcamentos:
+        gasto = float(orc.valor_gasto())
+        limite = float(orc.valor_limite)
+        percentual = orc.percentual_gasto()
+
+        dados.append({
+            'categoria': orc.categoria.nome,
+            'orcado': limite,
+            'gasto': gasto,
+            'saldo': limite - gasto,
+            'percentual': round(percentual, 1),
+            'status': 'excedido' if percentual > 100 else 'alerta' if percentual >= orc.alerta_em_percentual else 'ok'
+        })
+
+    return jsonify({
+        'orcamentos': dados,
+        'total_orcado': sum(d['orcado'] for d in dados),
+        'total_gasto': sum(d['gasto'] for d in dados)
+    })
+
+
+@bp.route('/api/progresso-metas')
+@login_required
+def api_progresso_metas():
+    """API: Progresso das metas de economia"""
+    metas = Meta.query.filter_by(
+        user_id=current_user.id,
+        status='ativa'
+    ).all()
+
+    dados = []
+    for meta in metas:
+        acumulado = float(meta.valor_acumulado())
+        alvo = float(meta.valor_alvo)
+        percentual = meta.percentual_concluido()
+
+        # Calcular se está no prazo
+        dias_totais = (meta.data_fim - meta.data_inicio).days
+        dias_passados = (date.today() - meta.data_inicio).days
+        percentual_tempo = (dias_passados / dias_totais * 100) if dias_totais > 0 else 0
+
+        status = 'adiantado' if percentual > percentual_tempo else 'no_prazo' if percentual >= percentual_tempo * 0.9 else 'atrasado'
+
+        dados.append({
+            'titulo': meta.titulo,
+            'alvo': alvo,
+            'acumulado': acumulado,
+            'faltante': alvo - acumulado,
+            'percentual': round(percentual, 1),
+            'percentual_tempo': round(percentual_tempo, 1),
+            'status': status,
+            'meses_restantes': meta.meses_restantes()
+        })
+
+    return jsonify({
+        'metas': dados,
+        'total_alvo': sum(d['alvo'] for d in dados),
+        'total_acumulado': sum(d['acumulado'] for d in dados)
+    })
+
+
+@bp.route('/api/comparacao-periodos')
+@login_required
+def api_comparacao_periodos():
+    """API: Comparação entre diferentes períodos"""
+    tipo = request.args.get('tipo', 'mensal')  # mensal, trimestral, anual
+    quantidade = request.args.get('quantidade', 6, type=int)
+
+    periodos = []
+    receitas = []
+    despesas = []
+    saldos = []
+
+    hoje = date.today()
+
+    for i in range(quantidade - 1, -1, -1):
+        if tipo == 'mensal':
+            data_ref = hoje - relativedelta(months=i)
+            inicio_periodo = date(data_ref.year, data_ref.month, 1)
+            fim_periodo = date(data_ref.year, data_ref.month, monthrange(data_ref.year, data_ref.month)[1])
+            label = f"{inicio_periodo.strftime('%b/%y')}"
+        elif tipo == 'trimestral':
+            data_ref = hoje - relativedelta(months=i*3)
+            inicio_periodo = date(data_ref.year, ((data_ref.month-1)//3)*3 + 1, 1)
+            fim_mes = ((data_ref.month-1)//3)*3 + 3
+            fim_periodo = date(data_ref.year, fim_mes, monthrange(data_ref.year, fim_mes)[1])
+            label = f"Q{((data_ref.month-1)//3)+1}/{data_ref.year}"
+        else:  # anual
+            data_ref = hoje - relativedelta(years=i)
+            inicio_periodo = date(data_ref.year, 1, 1)
+            fim_periodo = date(data_ref.year, 12, 31)
+            label = str(data_ref.year)
+
+        # Buscar receitas do período
+        total_receitas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
+            Conta.user_id == current_user.id,
+            Transacao.tipo == 'receita',
+            Transacao.data >= inicio_periodo,
+            Transacao.data <= fim_periodo
+        ).scalar() or 0
+
+        # Buscar despesas do período
+        total_despesas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
+            Conta.user_id == current_user.id,
+            Transacao.tipo == 'despesa',
+            Transacao.data >= inicio_periodo,
+            Transacao.data <= fim_periodo
+        ).scalar() or 0
+
+        periodos.append(label)
+        receitas.append(float(total_receitas))
+        despesas.append(float(total_despesas))
+        saldos.append(float(total_receitas - total_despesas))
+
+    return jsonify({
+        'periodos': periodos,
+        'receitas': receitas,
+        'despesas': despesas,
+        'saldos': saldos
+    })
+
+
+@bp.route('/api/top-categorias')
+@login_required
+def api_top_categorias():
+    """API: Top categorias por gastos"""
+    mes = request.args.get('mes', datetime.now().month, type=int)
+    ano = request.args.get('ano', datetime.now().year, type=int)
+    limite = request.args.get('limite', 10, type=int)
+
+    resultados = db.session.query(
+        Categoria.nome,
+        Categoria.cor,
+        func.sum(Transacao.valor).label('total'),
+        func.count(Transacao.id).label('quantidade')
+    ).join(Transacao).join(Conta).filter(
+        Conta.user_id == current_user.id,
+        Transacao.tipo == 'despesa',
+        extract('month', Transacao.data) == mes,
+        extract('year', Transacao.data) == ano
+    ).group_by(Categoria.nome, Categoria.cor).order_by(func.sum(Transacao.valor).desc()).limit(limite).all()
+
+    categorias = []
+    valores = []
+    cores = []
+    quantidades = []
+
+    for r in resultados:
+        categorias.append(r[0])
+        valores.append(float(r[2]))
+        cores.append(r[1] or '#3498db')
+        quantidades.append(r[3])
+
+    return jsonify({
+        'categorias': categorias,
+        'valores': valores,
+        'cores': cores,
+        'quantidades': quantidades,
+        'total': sum(valores)
+    })
+
+
+@bp.route('/api/analise-recorrentes')
+@login_required
+def api_analise_recorrentes():
+    """API: Análise de despesas recorrentes"""
+    # Buscar transações recorrentes ativas (próximas ocorrências)
+    hoje = date.today()
+    proximo_mes = hoje + relativedelta(months=1)
+
+    # Buscar transações recorrentes que têm ocorrências futuras
+    recorrentes = db.session.query(
+        Transacao.descricao,
+        Transacao.valor,
+        Transacao.frequencia_recorrencia,
+        Categoria.nome.label('categoria'),
+        func.min(Transacao.data).label('proxima_data')
+    ).join(Categoria).join(Conta).filter(
+        Conta.user_id == current_user.id,
+        Transacao.recorrente == True,
+        Transacao.data >= hoje,
+        Transacao.data <= proximo_mes
+    ).group_by(
+        Transacao.descricao,
+        Transacao.valor,
+        Transacao.frequencia_recorrencia,
+        Categoria.nome
+    ).all()
+
+    dados = []
+    total_mensal = 0
+
+    for rec in recorrentes:
+        valor = float(rec[1])
+
+        # Estimar impacto mensal baseado na frequência
+        frequencias_mult = {
+            'semanal': 4.33,
+            'quinzenal': 2,
+            'mensal': 1,
+            'bimestral': 0.5,
+            'trimestral': 0.33,
+            'semestral': 0.167,
+            'anual': 0.083
+        }
+
+        multiplicador = frequencias_mult.get(rec[2], 1)
+        impacto_mensal = valor * multiplicador
+        total_mensal += impacto_mensal
+
+        dados.append({
+            'descricao': rec[0],
+            'valor': valor,
+            'frequencia': rec[2],
+            'categoria': rec[3],
+            'proxima_data': rec[4].strftime('%Y-%m-%d'),
+            'impacto_mensal': round(impacto_mensal, 2)
+        })
+
+    return jsonify({
+        'recorrentes': dados,
+        'total_mensal_estimado': round(total_mensal, 2),
+        'quantidade': len(dados)
+    })
+
+
 # ==================== ROTAS DE CONCILIAÇÃO BANCÁRIA ====================
 
 @bp.route('/conciliacao')

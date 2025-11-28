@@ -1,86 +1,386 @@
 {% extends "base.html" %}
 
-{% block title %}Relatórios - Gestão Financeira{% endblock %}
+{% block title %}Relatórios Avançados - Gestão Financeira{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Relatórios e Análises</h1>
+<h1 class="mb-4">Relatórios Avançados</h1>
 
+<!-- Filtros Globais -->
 <div class="row mb-4">
-    <div class="col-12 col-md-6">
+    <div class="col-12">
         <div class="card">
-            <div class="card-header">
-                <h5>Filtros</h5>
-            </div>
             <div class="card-body">
-                <form id="filtroForm">
-                    <div class="mb-3">
-                        <label for="mes" class="form-label">Mês</label>
-                        <select class="form-select" id="mes" name="mes">
+                <div class="row align-items-end">
+                    <div class="col-md-2">
+                        <label for="mesGlobal" class="form-label">Mês</label>
+                        <select class="form-select" id="mesGlobal">
                             {% for i in range(1, 13) %}
-                                <option value="{{ i }}">{{ i }}</option>
+                                <option value="{{ i }}">{{ ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][i-1] }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label for="ano" class="form-label">Ano</label>
-                        <input type="number" class="form-control" id="ano" name="ano" min="2020" max="2099">
+                    <div class="col-md-2">
+                        <label for="anoGlobal" class="form-label">Ano</label>
+                        <input type="number" class="form-select" id="anoGlobal" min="2020" max="2099">
                     </div>
-                    <button type="button" class="btn btn-primary" onclick="atualizarGraficos()">
-                        <i class="bi bi-arrow-clockwise"></i> Atualizar
-                    </button>
-                </form>
+                    <div class="col-md-2">
+                        <label for="periodoComparacao" class="form-label">Período Comparação</label>
+                        <select class="form-select" id="periodoComparacao">
+                            <option value="mensal">Mensal</option>
+                            <option value="trimestral">Trimestral</option>
+                            <option value="anual">Anual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-primary" onclick="atualizarTodosRelatorios()">
+                            <i class="bi bi-arrow-clockwise"></i> Atualizar Relatórios
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12 col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5>Gastos por Categoria</h5>
-            </div>
-            <div class="card-body">
-                <div id="graficoCategorias"></div>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Abas de Relatórios -->
+<ul class="nav nav-tabs mb-4" id="relatoriosTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="visao-geral-tab" data-bs-toggle="tab" data-bs-target="#visao-geral" type="button">
+            <i class="bi bi-bar-chart"></i> Visão Geral
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="evolucao-tab" data-bs-toggle="tab" data-bs-target="#evolucao" type="button">
+            <i class="bi bi-graph-up"></i> Evolução Patrimonial
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="categorias-tab" data-bs-toggle="tab" data-bs-target="#categorias" type="button">
+            <i class="bi bi-pie-chart"></i> Categorias
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="orcamentos-tab" data-bs-toggle="tab" data-bs-target="#orcamentos" type="button">
+            <i class="bi bi-wallet2"></i> Orçamentos
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="metas-tab" data-bs-toggle="tab" data-bs-target="#metas" type="button">
+            <i class="bi bi-trophy"></i> Metas
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="cartoes-tab" data-bs-toggle="tab" data-bs-target="#cartoes" type="button">
+            <i class="bi bi-credit-card"></i> Cartões
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="comparacao-tab" data-bs-toggle="tab" data-bs-target="#comparacao" type="button">
+            <i class="bi bi-arrows-expand"></i> Comparações
+        </button>
+    </li>
+</ul>
 
-<div class="row">
-    <div class="col-12 col-md-12">
-        <div class="card">
-            <div class="card-header">
-                <h5>Fluxo de Caixa Anual</h5>
+<!-- Conteúdo das Abas -->
+<div class="tab-content" id="relatoriosTabContent">
+
+    <!-- ABA: Visão Geral -->
+    <div class="tab-pane fade show active" id="visao-geral" role="tabpanel">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Gastos por Categoria</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoCategoriasGeral" style="height: 400px;"></div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div id="graficoFluxoCaixa"></div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Fluxo de Caixa Anual</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoFluxoCaixaGeral" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Top 10 Categorias - Mês Atual</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoTopCategorias" style="height: 400px;"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- ABA: Evolução Patrimonial -->
+    <div class="tab-pane fade" id="evolucao" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" onclick="carregarEvolucao('mes')">Último Mês</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="carregarEvolucao('ano')">Último Ano</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="carregarEvolucao('tudo')">Todo Histórico</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Evolução do Patrimônio</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="saldoAtualInfo" class="alert alert-info mb-3"></div>
+                        <div id="graficoEvolucao" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: Categorias -->
+    <div class="tab-pane fade" id="categorias" role="tabpanel">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Distribuição por Categoria</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoCategoriaPizza" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Ranking de Gastos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="tabelaTopCategorias"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Análise de Despesas Recorrentes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="infoRecorrentes" class="mb-3"></div>
+                        <div id="tabelaRecorrentes"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: Orçamentos -->
+    <div class="tab-pane fade" id="orcamentos" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div id="resumoOrcamentos" class="alert alert-info"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Orçamentos vs Realizado</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoOrcamentos" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Detalhamento por Categoria</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="tabelaOrcamentos"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: Metas -->
+    <div class="tab-pane fade" id="metas" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div id="resumoMetas" class="alert alert-info"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Progresso das Metas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoMetas" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Status das Metas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="tabelaMetas"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: Cartões -->
+    <div class="tab-pane fade" id="cartoes" role="tabpanel">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Análise de Cartões de Crédito</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoCartoes" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Detalhamento dos Cartões</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="tabelaCartoes"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: Comparações -->
+    <div class="tab-pane fade" id="comparacao" role="tabpanel">
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" onclick="carregarComparacao('mensal', 6)">6 Meses</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('mensal', 12)">12 Meses</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('trimestral', 4)">4 Trimestres</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('anual', 3)">3 Anos</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Comparação de Períodos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoComparacao" style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Saldo por Período</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="graficoSaldoPeriodo" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Definir mês e ano atuais
+    // Inicialização
     const hoje = new Date();
-    document.getElementById('mes').value = hoje.getMonth() + 1;
-    document.getElementById('ano').value = hoje.getFullYear();
+    document.getElementById('mesGlobal').value = hoje.getMonth() + 1;
+    document.getElementById('anoGlobal').value = hoje.getFullYear();
 
-    // Carregar gráficos ao carregar a página
+    // Carregar relatórios ao carregar a página
     window.addEventListener('load', function() {
-        atualizarGraficos();
+        atualizarTodosRelatorios();
     });
 
-    function atualizarGraficos() {
-        carregarGraficoCategoria();
-        carregarGraficoFluxoCaixa();
+    // Função para atualizar todos os relatórios
+    function atualizarTodosRelatorios() {
+        // Visão Geral
+        carregarGraficoCategoriasGeral();
+        carregarGraficoFluxoCaixaGeral();
+        carregarTopCategorias();
+
+        // Outras abas (carregam on-demand quando clicadas)
     }
 
-    function carregarGraficoCategoria() {
-        const mes = document.getElementById('mes').value;
-        const ano = document.getElementById('ano').value;
+    // Listener para quando trocar de aba
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
+        button.addEventListener('shown.bs.tab', function (event) {
+            const targetId = event.target.getAttribute('data-bs-target');
+
+            if (targetId === '#evolucao') {
+                carregarEvolucao('ano');
+            } else if (targetId === '#categorias') {
+                carregarCategoriasDetalhado();
+                carregarRecorrentes();
+            } else if (targetId === '#orcamentos') {
+                carregarOrcamentos();
+            } else if (targetId === '#metas') {
+                carregarMetas();
+            } else if (targetId === '#cartoes') {
+                carregarCartoes();
+            } else if (targetId === '#comparacao') {
+                carregarComparacao('mensal', 6);
+            }
+        });
+    });
+
+    // ========== VISÃO GERAL ==========
+
+    function carregarGraficoCategoriasGeral() {
+        const mes = document.getElementById('mesGlobal').value;
+        const ano = document.getElementById('anoGlobal').value;
 
         fetch(`/api/gastos-por-categoria?mes=${mes}&ano=${ano}`)
             .then(response => response.json())
@@ -88,24 +388,20 @@
                 const trace = {
                     labels: data.categorias,
                     values: data.valores,
-                    type: 'pie',
-                    marker: {
-                        colors: ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e']
-                    }
+                    type: 'pie'
                 };
 
                 const layout = {
                     title: `Despesas por Categoria - ${mes}/${ano}`,
-                    height: 400
+                    height: 380
                 };
 
-                Plotly.newPlot('graficoCategorias', [trace], layout);
-            })
-            .catch(error => console.error('Erro ao carregar gráfico:', error));
+                Plotly.newPlot('graficoCategoriasGeral', [trace], layout);
+            });
     }
 
-    function carregarGraficoFluxoCaixa() {
-        const ano = document.getElementById('ano').value;
+    function carregarGraficoFluxoCaixaGeral() {
+        const ano = document.getElementById('anoGlobal').value;
 
         fetch(`/api/fluxo-caixa?ano=${ano}`)
             .then(response => response.json())
@@ -129,13 +425,421 @@
                 const layout = {
                     title: `Fluxo de Caixa - ${ano}`,
                     barmode: 'group',
-                    height: 400,
+                    height: 380,
                     yaxis: { title: 'Valor (R$)' }
                 };
 
-                Plotly.newPlot('graficoFluxoCaixa', [traceReceitas, traceDespesas], layout);
-            })
-            .catch(error => console.error('Erro ao carregar gráfico:', error));
+                Plotly.newPlot('graficoFluxoCaixaGeral', [traceReceitas, traceDespesas], layout);
+            });
+    }
+
+    function carregarTopCategorias() {
+        const mes = document.getElementById('mesGlobal').value;
+        const ano = document.getElementById('anoGlobal').value;
+
+        fetch(`/api/top-categorias?mes=${mes}&ano=${ano}&limite=10`)
+            .then(response => response.json())
+            .then(data => {
+                const trace = {
+                    x: data.valores,
+                    y: data.categorias,
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: { color: data.cores }
+                };
+
+                const layout = {
+                    title: 'Top 10 Categorias',
+                    height: 380,
+                    xaxis: { title: 'Valor (R$)' },
+                    margin: { l: 150 }
+                };
+
+                Plotly.newPlot('graficoTopCategorias', [trace], layout);
+            });
+    }
+
+    // ========== EVOLUÇÃO PATRIMONIAL ==========
+
+    function carregarEvolucao(periodo) {
+        fetch(`/api/evolucao-patrimonial?periodo=${periodo}`)
+            .then(response => response.json())
+            .then(data => {
+                // Atualizar info do saldo
+                document.getElementById('saldoAtualInfo').innerHTML = `
+                    <strong>Saldo Atual Total:</strong> R$ ${data.saldo_atual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                `;
+
+                const trace = {
+                    x: data.datas,
+                    y: data.valores,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tozeroy',
+                    line: { color: '#3498db', width: 2 }
+                };
+
+                const layout = {
+                    title: 'Evolução do Patrimônio',
+                    height: 480,
+                    xaxis: { title: 'Data' },
+                    yaxis: { title: 'Patrimônio (R$)' }
+                };
+
+                Plotly.newPlot('graficoEvolucao', [trace], layout);
+            });
+    }
+
+    // ========== CATEGORIAS DETALHADO ==========
+
+    function carregarCategoriasDetalhado() {
+        const mes = document.getElementById('mesGlobal').value;
+        const ano = document.getElementById('anoGlobal').value;
+
+        fetch(`/api/top-categorias?mes=${mes}&ano=${ano}&limite=15`)
+            .then(response => response.json())
+            .then(data => {
+                // Gráfico de pizza
+                const tracePizza = {
+                    labels: data.categorias,
+                    values: data.valores,
+                    type: 'pie',
+                    marker: { colors: data.cores }
+                };
+
+                Plotly.newPlot('graficoCategoriaPizza', [tracePizza], {
+                    height: 380,
+                    title: 'Distribuição de Despesas'
+                });
+
+                // Tabela
+                let html = '<table class="table table-striped">';
+                html += '<thead><tr><th>Categoria</th><th>Quantidade</th><th>Total</th><th>% do Total</th></tr></thead>';
+                html += '<tbody>';
+
+                for (let i = 0; i < data.categorias.length; i++) {
+                    const percentual = (data.valores[i] / data.total * 100).toFixed(1);
+                    html += `<tr>
+                        <td><span style="width: 12px; height: 12px; background-color: ${data.cores[i]}; display: inline-block; margin-right: 8px;"></span>${data.categorias[i]}</td>
+                        <td>${data.quantidades[i]} transações</td>
+                        <td>R$ ${data.valores[i].toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>${percentual}%</td>
+                    </tr>`;
+                }
+
+                html += '</tbody></table>';
+                document.getElementById('tabelaTopCategorias').innerHTML = html;
+            });
+    }
+
+    function carregarRecorrentes() {
+        fetch('/api/analise-recorrentes')
+            .then(response => response.json())
+            .then(data => {
+                // Info resumo
+                document.getElementById('infoRecorrentes').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Total de Despesas Recorrentes:</strong> ${data.quantidade}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Impacto Mensal Estimado:</strong> R$ ${data.total_mensal_estimado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                    </div>
+                `;
+
+                // Tabela
+                let html = '<table class="table table-striped">';
+                html += '<thead><tr><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Frequência</th><th>Próxima Data</th><th>Impacto Mensal</th></tr></thead>';
+                html += '<tbody>';
+
+                data.recorrentes.forEach(rec => {
+                    html += `<tr>
+                        <td>${rec.descricao}</td>
+                        <td>${rec.categoria}</td>
+                        <td>R$ ${rec.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td><span class="badge bg-info">${rec.frequencia}</span></td>
+                        <td>${new Date(rec.proxima_data).toLocaleDateString('pt-BR')}</td>
+                        <td>R$ ${rec.impacto_mensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('tabelaRecorrentes').innerHTML = html;
+            });
+    }
+
+    // ========== ORÇAMENTOS ==========
+
+    function carregarOrcamentos() {
+        const mes = document.getElementById('mesGlobal').value;
+        const ano = document.getElementById('anoGlobal').value;
+
+        fetch(`/api/orcamentos-vs-realizado?mes=${mes}&ano=${ano}`)
+            .then(response => response.json())
+            .then(data => {
+                // Resumo
+                document.getElementById('resumoOrcamentos').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>Total Orçado:</strong> R$ ${data.total_orcado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Total Gasto:</strong> R$ ${data.total_gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Saldo:</strong> <span class="${data.total_gasto > data.total_orcado ? 'text-danger' : 'text-success'}">
+                                R$ ${(data.total_orcado - data.total_gasto).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                            </span>
+                        </div>
+                    </div>
+                `;
+
+                // Gráfico
+                const categorias = data.orcamentos.map(o => o.categoria);
+                const orcados = data.orcamentos.map(o => o.orcado);
+                const gastos = data.orcamentos.map(o => o.gasto);
+
+                const traceOrcado = {
+                    x: categorias,
+                    y: orcados,
+                    name: 'Orçado',
+                    type: 'bar',
+                    marker: { color: '#3498db' }
+                };
+
+                const traceGasto = {
+                    x: categorias,
+                    y: gastos,
+                    name: 'Gasto',
+                    type: 'bar',
+                    marker: { color: '#e74c3c' }
+                };
+
+                Plotly.newPlot('graficoOrcamentos', [traceOrcado, traceGasto], {
+                    title: 'Orçamentos vs Realizado',
+                    barmode: 'group',
+                    height: 480,
+                    yaxis: { title: 'Valor (R$)' }
+                });
+
+                // Tabela
+                let html = '<table class="table table-striped">';
+                html += '<thead><tr><th>Categoria</th><th>Orçado</th><th>Gasto</th><th>Saldo</th><th>% Utilizado</th><th>Status</th></tr></thead>';
+                html += '<tbody>';
+
+                data.orcamentos.forEach(orc => {
+                    let statusClass = orc.status === 'ok' ? 'success' : orc.status === 'alerta' ? 'warning' : 'danger';
+                    let statusText = orc.status === 'ok' ? 'OK' : orc.status === 'alerta' ? 'Alerta' : 'Excedido';
+
+                    html += `<tr>
+                        <td>${orc.categoria}</td>
+                        <td>R$ ${orc.orcado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${orc.gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td class="${orc.saldo < 0 ? 'text-danger' : 'text-success'}">R$ ${orc.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>${orc.percentual}%</td>
+                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('tabelaOrcamentos').innerHTML = html;
+            });
+    }
+
+    // ========== METAS ==========
+
+    function carregarMetas() {
+        fetch('/api/progresso-metas')
+            .then(response => response.json())
+            .then(data => {
+                // Resumo
+                document.getElementById('resumoMetas').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>Total de Metas Ativas:</strong> ${data.metas.length}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Meta Total:</strong> R$ ${data.total_alvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Total Acumulado:</strong> R$ ${data.total_acumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                        </div>
+                    </div>
+                `;
+
+                // Gráfico
+                const titulos = data.metas.map(m => m.titulo);
+                const acumulados = data.metas.map(m => m.acumulado);
+                const alvos = data.metas.map(m => m.alvo);
+
+                const traceAcumulado = {
+                    x: titulos,
+                    y: acumulados,
+                    name: 'Acumulado',
+                    type: 'bar',
+                    marker: { color: '#2ecc71' }
+                };
+
+                const traceAlvo = {
+                    x: titulos,
+                    y: alvos,
+                    name: 'Meta',
+                    type: 'bar',
+                    marker: { color: '#95a5a6' }
+                };
+
+                Plotly.newPlot('graficoMetas', [traceAcumulado, traceAlvo], {
+                    title: 'Progresso das Metas',
+                    barmode: 'group',
+                    height: 480,
+                    yaxis: { title: 'Valor (R$)' }
+                });
+
+                // Tabela
+                let html = '<table class="table table-striped">';
+                html += '<thead><tr><th>Meta</th><th>Alvo</th><th>Acumulado</th><th>Faltante</th><th>% Concluído</th><th>Status</th><th>Meses Restantes</th></tr></thead>';
+                html += '<tbody>';
+
+                data.metas.forEach(meta => {
+                    let statusClass = meta.status === 'adiantado' ? 'success' : meta.status === 'no_prazo' ? 'info' : 'warning';
+                    let statusText = meta.status === 'adiantado' ? 'Adiantado' : meta.status === 'no_prazo' ? 'No Prazo' : 'Atrasado';
+
+                    html += `<tr>
+                        <td>${meta.titulo}</td>
+                        <td>R$ ${meta.alvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${meta.acumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${meta.faltante.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: ${Math.min(meta.percentual, 100)}%">${meta.percentual}%</div>
+                            </div>
+                        </td>
+                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                        <td>${meta.meses_restantes} meses</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('tabelaMetas').innerHTML = html;
+            });
+    }
+
+    // ========== CARTÕES ==========
+
+    function carregarCartoes() {
+        fetch('/api/analise-cartoes')
+            .then(response => response.json())
+            .then(data => {
+                if (data.cartoes.length === 0) {
+                    document.getElementById('graficoCartoes').innerHTML = '<p class="text-center">Nenhum cartão de crédito cadastrado.</p>';
+                    document.getElementById('tabelaCartoes').innerHTML = '';
+                    return;
+                }
+
+                // Gráfico de limites
+                const nomes = data.cartoes.map(c => c.nome);
+                const utilizados = data.cartoes.map(c => c.utilizado);
+                const disponiveis = data.cartoes.map(c => c.disponivel);
+
+                const traceUtilizado = {
+                    x: nomes,
+                    y: utilizados,
+                    name: 'Utilizado',
+                    type: 'bar',
+                    marker: { color: '#e74c3c' }
+                };
+
+                const traceDisponivel = {
+                    x: nomes,
+                    y: disponiveis,
+                    name: 'Disponível',
+                    type: 'bar',
+                    marker: { color: '#2ecc71' }
+                };
+
+                Plotly.newPlot('graficoCartoes', [traceUtilizado, traceDisponivel], {
+                    title: 'Limites dos Cartões',
+                    barmode: 'stack',
+                    height: 380,
+                    yaxis: { title: 'Valor (R$)' }
+                });
+
+                // Tabela
+                let html = '<table class="table table-striped">';
+                html += '<thead><tr><th>Cartão</th><th>Bandeira</th><th>Limite Total</th><th>Utilizado</th><th>Disponível</th><th>% Uso</th><th>Faturas Abertas</th><th>Gasto Médio/Mês</th></tr></thead>';
+                html += '<tbody>';
+
+                data.cartoes.forEach(cartao => {
+                    let corPercentual = cartao.percentual > 80 ? 'danger' : cartao.percentual > 50 ? 'warning' : 'success';
+
+                    html += `<tr>
+                        <td>${cartao.nome}</td>
+                        <td>${cartao.bandeira || '-'}</td>
+                        <td>R$ ${cartao.limite.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${cartao.utilizado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>R$ ${cartao.disponivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar bg-${corPercentual}" style="width: ${cartao.percentual}%">${cartao.percentual}%</div>
+                            </div>
+                        </td>
+                        <td>${cartao.faturas_abertas}</td>
+                        <td>R$ ${cartao.gasto_medio_mensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                document.getElementById('tabelaCartoes').innerHTML = html;
+            });
+    }
+
+    // ========== COMPARAÇÕES ==========
+
+    function carregarComparacao(tipo, quantidade) {
+        fetch(`/api/comparacao-periodos?tipo=${tipo}&quantidade=${quantidade}`)
+            .then(response => response.json())
+            .then(data => {
+                // Gráfico de comparação
+                const traceReceitas = {
+                    x: data.periodos,
+                    y: data.receitas,
+                    name: 'Receitas',
+                    type: 'bar',
+                    marker: { color: '#2ecc71' }
+                };
+
+                const traceDespesas = {
+                    x: data.periodos,
+                    y: data.despesas,
+                    name: 'Despesas',
+                    type: 'bar',
+                    marker: { color: '#e74c3c' }
+                };
+
+                Plotly.newPlot('graficoComparacao', [traceReceitas, traceDespesas], {
+                    title: 'Receitas vs Despesas por Período',
+                    barmode: 'group',
+                    height: 480,
+                    yaxis: { title: 'Valor (R$)' }
+                });
+
+                // Gráfico de saldo
+                const traceSaldo = {
+                    x: data.periodos,
+                    y: data.saldos,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    marker: { size: 8 },
+                    line: { color: '#3498db', width: 2 }
+                };
+
+                Plotly.newPlot('graficoSaldoPeriodo', [traceSaldo], {
+                    title: 'Saldo (Receitas - Despesas) por Período',
+                    height: 380,
+                    yaxis: { title: 'Saldo (R$)' }
+                });
+            });
     }
 </script>
 {% endblock %}
