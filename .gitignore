@@ -35,16 +35,23 @@ venv.bak/
 *~
 .DS_Store
 
-# Environment variables
+# Environment variables (CRÍTICO - NUNCA COMMITAR!)
 .env
+.env.local
+.env.*.local
+.env.production
+.env.development
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Logs
+# Logs (IMPORTANTE - pode conter informações sensíveis!)
 *.log
+logs/
+security.log
+gestao_financeira.log
 
 # Flask
 instance/
