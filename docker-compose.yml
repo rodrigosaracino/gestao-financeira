@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: gestao_financeira
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    # ports:
+    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,7 +27,7 @@ services:
     environment:
       FLASK_APP: run.py
       FLASK_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/gestao_financeira
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/gestao_financeira}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
     ports:
       - "8001:5000"
@@ -39,6 +39,19 @@ services:
       - ./app:/app/app
       - ./run.py:/app/run.py
       - ./config.py:/app/config.py
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gf.rule=Host(`gf.amzcursos.com`)"
+      - "traefik.http.routers.gf.entrypoints=websecure"
+      - "traefik.http.routers.gf.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gf.loadbalancer.server.port=5000"
 
 volumes:
   postgres_data:
+
+networks:
+  traefik:
+    external: true
