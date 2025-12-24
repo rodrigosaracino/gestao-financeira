@@ -3,12 +3,70 @@ Rotas de autenticação (login, logout, registro)
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_user, logout_user, login_required, current_user
-from app.models import db, User
+from app.models import db, User, Categoria
 from app.security import (
     sanitize_input, validate_email, get_client_ip,
     record_login_attempt, is_ip_blocked, log_suspicious_activity
 )
 from app import limiter
+
+# Categorias padrão criadas automaticamente para novos usuários
+CATEGORIAS_PADRAO = {
+    'despesa': [
+        {'nome': 'Alimentação', 'cor': '#e74c3c'},
+        {'nome': 'Transporte', 'cor': '#3498db'},
+        {'nome': 'Moradia', 'cor': '#9b59b6'},
+        {'nome': 'Saúde', 'cor': '#2ecc71'},
+        {'nome': 'Educação', 'cor': '#f39c12'},
+        {'nome': 'Lazer e Entretenimento', 'cor': '#1abc9c'},
+        {'nome': 'Vestuário', 'cor': '#e67e22'},
+        {'nome': 'Contas e Serviços', 'cor': '#34495e'},
+        {'nome': 'Mercado', 'cor': '#c0392b'},
+        {'nome': 'Combustível', 'cor': '#16a085'},
+        {'nome': 'Restaurantes', 'cor': '#d35400'},
+        {'nome': 'Academia e Esportes', 'cor': '#27ae60'},
+        {'nome': 'Farmácia', 'cor': '#8e44ad'},
+        {'nome': 'Beleza e Cuidados Pessoais', 'cor': '#f368e0'},
+        {'nome': 'Internet e Telefone', 'cor': '#2c3e50'},
+        {'nome': 'Streaming e Assinaturas', 'cor': '#6c5ce7'},
+        {'nome': 'Viagens', 'cor': '#00b894'},
+        {'nome': 'Presentes e Doações', 'cor': '#fd79a8'},
+        {'nome': 'Impostos e Taxas', 'cor': '#636e72'},
+        {'nome': 'Seguros', 'cor': '#2d3436'},
+        {'nome': 'Pets', 'cor': '#a29bfe'},
+        {'nome': 'Manutenção e Reparos', 'cor': '#fab1a0'},
+        {'nome': 'Outros', 'cor': '#95a5a6'},
+    ],
+    'receita': [
+        {'nome': 'Salário', 'cor': '#27ae60'},
+        {'nome': 'Freelance', 'cor': '#16a085'},
+        {'nome': 'Investimentos', 'cor': '#2ecc71'},
+        {'nome': 'Aluguel Recebido', 'cor': '#1abc9c'},
+        {'nome': 'Bonificações', 'cor': '#3498db'},
+        {'nome': 'Restituição de Impostos', 'cor': '#9b59b6'},
+        {'nome': 'Vendas', 'cor': '#f39c12'},
+        {'nome': 'Presentes Recebidos', 'cor': '#fd79a8'},
+        {'nome': 'Outras Receitas', 'cor': '#95a5a6'},
+    ]
+}
+
+
+def criar_categorias_padrao(user_id):
+    """
+    Cria categorias padrão para um novo usuário.
+
+    Args:
+        user_id: ID do usuário
+    """
+    for tipo, categorias in CATEGORIAS_PADRAO.items():
+        for cat_data in categorias:
+            categoria = Categoria(
+                nome=cat_data['nome'],
+                tipo=tipo,
+                cor=cat_data['cor'],
+                user_id=user_id
+            )
+            db.session.add(categoria)
 
 auth = Blueprint('auth', __name__)
 
@@ -141,6 +199,11 @@ def registro():
         novo_user.set_password(senha)
 
         db.session.add(novo_user)
+        db.session.flush()  # Para obter o ID do usuário
+
+        # Criar categorias padrão para o novo usuário
+        criar_categorias_padrao(novo_user.id)
+
         db.session.commit()
 
         log_suspicious_activity(f"Novo usuário registrado: {email}", level='info')

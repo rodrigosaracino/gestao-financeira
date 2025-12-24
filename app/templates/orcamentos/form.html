@@ -14,19 +14,27 @@
                     </h4>
                 </div>
                 <div class="card-body">
-                    <form method="POST">
+                    <form method="POST" id="formOrcamento">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="categoria_id" class="form-label">Categoria *</label>
-                            <select class="form-select" id="categoria_id" name="categoria_id" required
-                                    {% if orcamento %}disabled{% endif %}>
-                                <option value="">Selecione uma categoria</option>
-                                {% for categoria in categorias %}
-                                <option value="{{ categoria.id }}"
-                                        {% if orcamento and orcamento.categoria_id == categoria.id %}selected{% endif %}>
-                                    {{ categoria.nome }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <div class="input-group">
+                                <select class="form-select" id="categoria_id" name="categoria_id" required
+                                        {% if orcamento %}disabled{% endif %}>
+                                    <option value="">Selecione uma categoria</option>
+                                    {% for categoria in categorias %}
+                                    <option value="{{ categoria.id }}"
+                                            {% if orcamento and orcamento.categoria_id == categoria.id %}selected{% endif %}>
+                                        {{ categoria.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% if not orcamento %}
+                                <button class="btn btn-outline-primary" type="button" id="btnNovaCategoria">
+                                    <i class="bi bi-plus-circle"></i> Nova
+                                </button>
+                                {% endif %}
+                            </div>
                             {% if orcamento %}
                             <input type="hidden" name="categoria_id" value="{{ orcamento.categoria_id }}">
                             {% endif %}
@@ -94,4 +102,110 @@
         </div>
     </div>
 </div>
+
+<!-- Modal para criar nova categoria -->
+<div class="modal fade" id="modalNovaCategoria" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-folder-plus"></i> Nova Categoria</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="nova_categoria_nome" class="form-label">Nome da Categoria *</label>
+                    <input type="text" class="form-control" id="nova_categoria_nome" required>
+                </div>
+                <div class="mb-3">
+                    <label for="nova_categoria_cor" class="form-label">Cor</label>
+                    <input type="color" class="form-control form-control-color" id="nova_categoria_cor" value="#3498db">
+                </div>
+                <div id="alertaCategoria" class="alert d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarCategoria">Salvar Categoria</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnNovaCategoria = document.getElementById('btnNovaCategoria');
+    const modalNovaCategoria = new bootstrap.Modal(document.getElementById('modalNovaCategoria'));
+    const btnSalvarCategoria = document.getElementById('btnSalvarCategoria');
+
+    if (btnNovaCategoria) {
+        btnNovaCategoria.addEventListener('click', function() {
+            document.getElementById('nova_categoria_nome').value = '';
+            document.getElementById('nova_categoria_cor').value = '#3498db';
+            document.getElementById('alertaCategoria').classList.add('d-none');
+            modalNovaCategoria.show();
+        });
+    }
+
+    btnSalvarCategoria.addEventListener('click', function() {
+        const nome = document.getElementById('nova_categoria_nome').value.trim();
+        const cor = document.getElementById('nova_categoria_cor').value;
+        const alertaDiv = document.getElementById('alertaCategoria');
+
+        if (!nome) {
+            alertaDiv.className = 'alert alert-danger';
+            alertaDiv.textContent = 'Por favor, informe o nome da categoria';
+            alertaDiv.classList.remove('d-none');
+            return;
+        }
+
+        // Desabilitar botão durante o salvamento
+        btnSalvarCategoria.disabled = true;
+        btnSalvarCategoria.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+
+        // Enviar requisição para criar categoria
+        fetch('{{ url_for("main.api_criar_categoria") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                nome: nome,
+                tipo: 'despesa',
+                cor: cor
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.erro) {
+                alertaDiv.className = 'alert alert-danger';
+                alertaDiv.textContent = data.erro;
+                alertaDiv.classList.remove('d-none');
+                btnSalvarCategoria.disabled = false;
+                btnSalvarCategoria.innerHTML = 'Salvar Categoria';
+            } else {
+                // Adicionar nova categoria ao select
+                const select = document.getElementById('categoria_id');
+                const option = document.createElement('option');
+                option.value = data.id;
+                option.text = data.nome;
+                option.selected = true;
+                select.add(option);
+
+                // Fechar modal
+                modalNovaCategoria.hide();
+
+                // Resetar botão
+                btnSalvarCategoria.disabled = false;
+                btnSalvarCategoria.innerHTML = 'Salvar Categoria';
+            }
+        })
+        .catch(error => {
+            alertaDiv.className = 'alert alert-danger';
+            alertaDiv.textContent = 'Erro ao criar categoria: ' + error;
+            alertaDiv.classList.remove('d-none');
+            btnSalvarCategoria.disabled = false;
+            btnSalvarCategoria.innerHTML = 'Salvar Categoria';
+        });
+    });
+});
+</script>
 {% endblock %}

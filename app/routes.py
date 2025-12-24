@@ -170,6 +170,99 @@ def index():
     ).all()
     total_faturas = sum(fatura.valor_total for fatura in faturas_abertas)
 
+    # LEMBRETES DE METAS - Metas ativas que precisam de aporte
+    metas_ativas = Meta.query.filter_by(
+        user_id=current_user.id,
+        status='ativa'
+    ).order_by(Meta.data_fim).limit(5).all()
+
+    # Processar metas para calcular status
+    lembretes_metas = []
+    for meta in metas_ativas:
+        acumulado = meta.valor_acumulado()
+        alvo = meta.valor_alvo
+        percentual = meta.percentual_concluido()
+
+        # Calcular se está no prazo
+        dias_totais = (meta.data_fim - meta.data_inicio).days
+        dias_passados = (date.today() - meta.data_inicio).days
+        percentual_tempo = (dias_passados / dias_totais * 100) if dias_totais > 0 else 0
+
+        # Determinar status e urgência
+        if percentual >= 100:
+            status = 'concluida'
+            urgencia = 'baixa'
+        elif percentual < percentual_tempo * 0.8:
+            status = 'atrasado'
+            urgencia = 'alta'
+        elif percentual < percentual_tempo * 0.9:
+            status = 'atencao'
+            urgencia = 'media'
+        else:
+            status = 'no_prazo'
+            urgencia = 'baixa'
+
+        # Calcular valor mensal sugerido
+        dias_restantes = (meta.data_fim - date.today()).days
+        if dias_restantes > 0:
+            faltante = float(alvo - acumulado)
+            meses_restantes = dias_restantes / 30
+            aporte_sugerido = faltante / meses_restantes if meses_restantes > 0 else faltante
+        else:
+            aporte_sugerido = 0
+
+        lembretes_metas.append({
+            'id': meta.id,
+            'titulo': meta.titulo,
+            'percentual': round(percentual, 1),
+            'acumulado': float(acumulado),
+            'alvo': float(alvo),
+            'faltante': float(alvo - acumulado),
+            'data_fim': meta.data_fim,
+            'status': status,
+            'urgencia': urgencia,
+            'aporte_sugerido': round(aporte_sugerido, 2),
+            'meses_restantes': meta.meses_restantes()
+        })
+
+    # ALERTAS DE ORÇAMENTOS - Orçamentos do mês atual
+    orcamentos_mes = Orcamento.query.filter_by(
+        user_id=current_user.id,
+        mes=datetime.now().month,
+        ano=datetime.now().year
+    ).all()
+
+    alertas_orcamentos = []
+    for orc in orcamentos_mes:
+        gasto = float(orc.valor_gasto())
+        limite = float(orc.valor_limite)
+        percentual = orc.percentual_gasto()
+
+        # Determinar status
+        if percentual >= 100:
+            status = 'excedido'
+            urgencia = 'alta'
+        elif percentual >= orc.alerta_em_percentual:
+            status = 'alerta'
+            urgencia = 'media'
+        else:
+            status = 'ok'
+            urgencia = 'baixa'
+
+        # Só adicionar se tiver alerta ou excedido
+        if status != 'ok':
+            alertas_orcamentos.append({
+                'id': orc.id,
+                'categoria': orc.categoria.nome,
+                'cor': orc.categoria.cor,
+                'gasto': gasto,
+                'limite': limite,
+                'disponivel': limite - gasto,
+                'percentual': round(percentual, 1),
+                'status': status,
+                'urgencia': urgencia
+            })
+
     return render_template('index.html',
                          contas=contas,
                          saldo_total=saldo_total,
@@ -184,7 +277,9 @@ def index():
                          ano_filtro=ano_filtro,
                          projecao_fluxo=projecao_fluxo,
                          proximos_pagamentos=proximos_pagamentos,
-                         proximas_receitas=proximas_receitas)
+                         proximas_receitas=proximas_receitas,
+                         lembretes_metas=lembretes_metas,
+                         alertas_orcamentos=alertas_orcamentos)
 
 
 # ==================== CONTAS ====================

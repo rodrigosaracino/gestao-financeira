@@ -200,6 +200,193 @@
     </div>
 </div>
 
+<!-- Lembretes e Alertas Section -->
+<div class="row mb-4">
+    <!-- Lembretes de Metas -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="bi bi-trophy"></i> Lembretes de Metas</h5>
+                <a href="{{ url_for('main.listar_metas') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> Ver Todas
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for lembrete in lembretes_metas %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div style="flex: 1;">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        {% if lembrete.urgencia == 'alta' %}
+                                            <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                                        {% elif lembrete.urgencia == 'media' %}
+                                            <i class="bi bi-exclamation-circle-fill text-warning"></i>
+                                        {% else %}
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        {% endif %}
+                                        <strong>{{ lembrete.titulo }}</strong>
+                                    </div>
+                                    <small class="text-muted">
+                                        Prazo: {{ lembrete.data_fim.strftime('%d/%m/%Y') }}
+                                        {% if lembrete.meses_restantes > 0 %}
+                                            ({{ lembrete.meses_restantes }} meses restantes)
+                                        {% else %}
+                                            (prazo vencido)
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge
+                                        {% if lembrete.status == 'atrasado' %}bg-danger
+                                        {% elif lembrete.status == 'atencao' %}bg-warning
+                                        {% elif lembrete.status == 'concluida' %}bg-success
+                                        {% else %}bg-info{% endif %}">
+                                        {{ lembrete.percentual }}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Barra de progresso -->
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar
+                                    {% if lembrete.status == 'atrasado' %}bg-danger
+                                    {% elif lembrete.status == 'atencao' %}bg-warning
+                                    {% elif lembrete.status == 'concluida' %}bg-success
+                                    {% else %}bg-info{% endif %}"
+                                    role="progressbar"
+                                    style="width: {{ lembrete.percentual }}%"
+                                    aria-valuenow="{{ lembrete.percentual }}"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    R$ {{ "%.2f"|format(lembrete.acumulado) }} de R$ {{ "%.2f"|format(lembrete.alvo) }}
+                                </small>
+                                {% if lembrete.faltante > 0 %}
+                                    <small class="text-muted">
+                                        Falta: <strong class="text-danger">R$ {{ "%.2f"|format(lembrete.faltante) }}</strong>
+                                    </small>
+                                {% endif %}
+                            </div>
+
+                            {% if lembrete.aporte_sugerido > 0 and lembrete.status != 'concluida' %}
+                                <div class="alert alert-info mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
+                                    <i class="bi bi-lightbulb"></i>
+                                    <strong>Sugestão:</strong> Aporte R$ {{ "%.2f"|format(lembrete.aporte_sugerido) }}/mês
+                                    para atingir a meta no prazo.
+                                </div>
+                            {% endif %}
+
+                            <div class="mt-2">
+                                <a href="{{ url_for('main.ver_meta', id=lembrete.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-piggy-bank"></i> Fazer Aporte
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-trophy" style="font-size: 3rem; color: var(--color-text-tertiary); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Nenhuma meta ativa</p>
+                            <a href="{{ url_for('main.nova_meta') }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle"></i> Criar Meta
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas de Orçamentos -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="bi bi-calculator"></i> Alertas de Orçamentos</h5>
+                <a href="{{ url_for('main.listar_orcamentos') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> Ver Todos
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for alerta in alertas_orcamentos %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div style="flex: 1;">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        {% if alerta.status == 'excedido' %}
+                                            <i class="bi bi-x-octagon-fill text-danger"></i>
+                                        {% else %}
+                                            <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                        {% endif %}
+                                        <strong>{{ alerta.categoria }}</strong>
+                                    </div>
+                                    <small class="text-muted">
+                                        {% if alerta.status == 'excedido' %}
+                                            Orçamento excedido!
+                                        {% else %}
+                                            Atenção: próximo do limite
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge {% if alerta.status == 'excedido' %}bg-danger{% else %}bg-warning{% endif %}">
+                                        {{ alerta.percentual }}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Barra de progresso -->
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar {% if alerta.status == 'excedido' %}bg-danger{% else %}bg-warning{% endif %}"
+                                    role="progressbar"
+                                    style="width: {{ [alerta.percentual, 100]|min }}%"
+                                    aria-valuenow="{{ alerta.percentual }}"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    Gasto: <strong class="text-danger">R$ {{ "%.2f"|format(alerta.gasto) }}</strong>
+                                </small>
+                                <small class="text-muted">
+                                    Limite: R$ {{ "%.2f"|format(alerta.limite) }}
+                                </small>
+                            </div>
+
+                            {% if alerta.disponivel < 0 %}
+                                <div class="alert alert-danger mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <strong>Atenção:</strong> Você excedeu o orçamento em
+                                    R$ {{ "%.2f"|format(alerta.disponivel * -1) }}!
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Disponível:</strong> R$ {{ "%.2f"|format(alerta.disponivel) }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-check-circle-fill" style="font-size: 3rem; color: var(--color-accent-green); opacity: 0.3;"></i>
+                            <p class="text-muted mt-3">Todos os orçamentos estão dentro do limite</p>
+                            <a href="{{ url_for('main.novo_orcamento') }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle"></i> Criar Orçamento
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Bank Accounts Section -->
 <div class="row mb-4">
     <div class="col-md-6 mb-4">
