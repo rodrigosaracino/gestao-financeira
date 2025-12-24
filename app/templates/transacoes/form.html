@@ -8,6 +8,7 @@
 <div class="card">
     <div class="card-body">
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <label for="descricao" class="form-label">Descrição</label>
                 <input type="text" class="form-control" id="descricao" name="descricao" required>
@@ -568,10 +569,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
             const response = await fetch('/api/categorias', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
                 },
                 body: JSON.stringify({ nome, tipo, cor })
             });
