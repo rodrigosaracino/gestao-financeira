@@ -16,3 +16,4 @@ fuzzywuzzy>=0.18.0
 python-Levenshtein>=0.21.0
 bleach>=6.0.0
 email-validator>=2.0.0
+requests>=2.31.0

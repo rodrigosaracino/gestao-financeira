@@ -109,8 +109,9 @@ def create_app(config_class=Config):
         return response
 
     # Registrar blueprints
-    from app import routes, auth
+    from app import routes, auth, investimentos
     app.register_blueprint(routes.bp)
     app.register_blueprint(auth.auth)
+    app.register_blueprint(investimentos.investimentos_bp)
 
     return app

@@ -79,6 +79,11 @@
             <i class="bi bi-arrows-expand"></i> Comparações
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="investimentos-tab" data-bs-toggle="tab" data-bs-target="#investimentos" type="button">
+            <i class="bi bi-graph-up-arrow"></i> Investimentos
+        </button>
+    </li>
 </ul>
 
 <!-- Conteúdo das Abas -->
@@ -327,6 +332,14 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- ABA: Investimentos -->
+    <div class="tab-pane fade" id="investimentos" role="tabpanel">
+        <iframe src="{{ url_for('investimentos.relatorios') }}"
+                style="width: 100%; height: 1200px; border: none;"
+                title="Relatórios de Investimentos">
+        </iframe>
     </div>
 
 </div>

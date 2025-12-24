@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Adicionar Ativo - Investimentos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Adicionar Ativo à Carteira</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="ticker" class="form-label">Ticker *</label>
+                                <input type="text" class="form-control text-uppercase" id="ticker" name="ticker" required placeholder="PETR4, MXRF11, etc">
+                                <small class="text-muted">Código do ativo na B3</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="tipo_ativo_id" class="form-label">Tipo de Ativo *</label>
+                                <select class="form-select" id="tipo_ativo_id" name="tipo_ativo_id" required>
+                                    <option value="">Selecione...</option>
+                                    {% for tipo in tipos_ativos %}
+                                    <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="instituicao" class="form-label">Instituição (Corretora/Banco)</label>
+                            <input type="text" class="form-control" id="instituicao" name="instituicao" placeholder="Ex: XP Investimentos, Rico, BTG">
+                            <small class="text-muted">Onde você mantém este investimento</small>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="quantidade" class="form-label">Quantidade *</label>
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" step="0.0001" min="0" required>
+                                <small class="text-muted">Ex: 100 ações ou 10.5 cotas</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="preco_medio" class="form-label">Preço Médio (R$) *</label>
+                                <input type="number" class="form-control" id="preco_medio" name="preco_medio" step="0.01" min="0" required>
+                                <small class="text-muted">Preço médio de compra</small>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Dica:</strong> Após adicionar o ativo, o sistema buscará automaticamente o preço atual na B3 através da API gratuita brapi.dev
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('investimentos.index') }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Adicionar Ativo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-uppercase no ticker
+document.getElementById('ticker').addEventListener('input', function(e) {
+    e.target.value = e.target.value.toUpperCase();
+});
+</script>
+{% endblock %}

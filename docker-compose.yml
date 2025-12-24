@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/gestao_financeira
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
     ports:
-      - "8000:5000"
+      - "8001:5000"
     depends_on:
       db:
         condition: service_healthy

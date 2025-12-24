@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios de Investimentos - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-graph-up-arrow"></i> Relatórios de Investimentos</h2>
+                <a href="{{ url_for('investimentos.index') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left"></i> Voltar para Carteira
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4" id="cards-resumo">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Valor Investido</h6>
+                    <h4 class="mb-0" id="card-investido">-</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Valor Atual</h6>
+                    <h4 class="mb-0" id="card-atual">-</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Rentabilidade</h6>
+                    <h4 class="mb-0" id="card-rentabilidade">-</h4>
+                    <small id="card-rentabilidade-percent">-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="text-muted">Ativos / Tipos</h6>
+                    <h4 class="mb-0" id="card-ativos">-</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row">
+        <!-- Distribuição por Tipo -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Distribuição por Tipo de Ativo</h5>
+                </div>
+                <div class="card-body">
+                    <div id="grafico-distribuicao-tipos" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Composição da Carteira (Top 10) -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Composição da Carteira (Top 10)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="grafico-composicao" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rentabilidade por Ativo -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Rentabilidade por Ativo</h5>
+                </div>
+                <div class="card-body">
+                    <div id="grafico-rentabilidade" style="height: 500px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evolução Patrimonial -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Evolução do Patrimônio (Últimos 12 Meses)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="grafico-evolucao" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Plotly.js -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    carregarTodosGraficos();
+});
+
+function carregarTodosGraficos() {
+    carregarResumo();
+    carregarDistribuicaoTipos();
+    carregarComposicao();
+    carregarRentabilidade();
+    carregarEvolucao();
+}
+
+function formatarMoeda(valor) {
+    return 'R$ ' + parseFloat(valor).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function carregarResumo() {
+    fetch('{{ url_for("investimentos.api_resumo_estatisticas") }}')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('card-investido').textContent = formatarMoeda(data.valor_investido);
+            document.getElementById('card-atual').textContent = formatarMoeda(data.valor_atual);
+
+            const rentReais = data.rentabilidade_reais;
+            const rentPercent = data.rentabilidade_percentual;
+            const corRent = rentReais >= 0 ? 'text-success' : 'text-danger';
+
+            document.getElementById('card-rentabilidade').textContent = formatarMoeda(rentReais);
+            document.getElementById('card-rentabilidade').className = 'mb-0 ' + corRent;
+            document.getElementById('card-rentabilidade-percent').textContent = rentPercent.toFixed(2) + '%';
+            document.getElementById('card-rentabilidade-percent').className = corRent;
+
+            document.getElementById('card-ativos').textContent = data.total_ativos + ' / ' + data.total_tipos;
+        })
+        .catch(error => console.error('Erro ao carregar resumo:', error));
+}
+
+function carregarDistribuicaoTipos() {
+    fetch('{{ url_for("investimentos.api_grafico_distribuicao_tipos") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.labels.length === 0) {
+                document.getElementById('grafico-distribuicao-tipos').innerHTML =
+                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+                return;
+            }
+
+            const trace = {
+                type: 'pie',
+                labels: data.labels,
+                values: data.values,
+                hoverinfo: 'label+value+percent',
+                textinfo: 'percent',
+                hole: 0.4,
+                marker: {
+                    colors: ['#0066ff', '#00cc66', '#ff9900', '#ff3366', '#9933ff', '#00cccc', '#ffcc00', '#cc0066']
+                }
+            };
+
+            const layout = {
+                margin: { t: 0, b: 0, l: 0, r: 0 },
+                showlegend: true,
+                legend: {
+                    orientation: 'v',
+                    x: 1,
+                    y: 0.5
+                }
+            };
+
+            Plotly.newPlot('grafico-distribuicao-tipos', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Erro ao carregar distribuição:', error));
+}
+
+function carregarComposicao() {
+    fetch('{{ url_for("investimentos.api_grafico_composicao_carteira") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.length === 0) {
+                document.getElementById('grafico-composicao').innerHTML =
+                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+                return;
+            }
+
+            const tickers = data.map(d => d.ticker);
+            const valores = data.map(d => d.valor);
+            const percentuais = data.map(d => d.percentual);
+
+            const trace = {
+                type: 'bar',
+                x: tickers,
+                y: valores,
+                text: percentuais.map(p => p.toFixed(1) + '%'),
+                textposition: 'auto',
+                hovertemplate: '<b>%{x}</b><br>' +
+                              'Valor: R$ %{y:,.2f}<br>' +
+                              '<extra></extra>',
+                marker: {
+                    color: '#0066ff',
+                    line: {
+                        color: '#004499',
+                        width: 1
+                    }
+                }
+            };
+
+            const layout = {
+                margin: { t: 20, b: 60, l: 60, r: 20 },
+                xaxis: {
+                    title: 'Ticker',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'Valor (R$)',
+                    tickformat: ',.2f'
+                },
+                showlegend: false
+            };
+
+            Plotly.newPlot('grafico-composicao', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Erro ao carregar composição:', error));
+}
+
+function carregarRentabilidade() {
+    fetch('{{ url_for("investimentos.api_grafico_rentabilidade_ativos") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.length === 0) {
+                document.getElementById('grafico-rentabilidade').innerHTML =
+                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+                return;
+            }
+
+            const tickers = data.map(d => d.ticker);
+            const rentabilidades = data.map(d => d.rentabilidade_percentual);
+            const cores = rentabilidades.map(r => r >= 0 ? '#00cc66' : '#ff3366');
+
+            const trace = {
+                type: 'bar',
+                x: tickers,
+                y: rentabilidades,
+                text: rentabilidades.map(r => r.toFixed(2) + '%'),
+                textposition: 'auto',
+                hovertemplate: '<b>%{x}</b><br>' +
+                              'Rentabilidade: %{y:.2f}%<br>' +
+                              '<extra></extra>',
+                marker: {
+                    color: cores
+                }
+            };
+
+            const layout = {
+                margin: { t: 20, b: 60, l: 60, r: 20 },
+                xaxis: {
+                    title: 'Ticker',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'Rentabilidade (%)',
+                    zeroline: true,
+                    zerolinewidth: 2,
+                    zerolinecolor: '#999'
+                },
+                showlegend: false,
+                shapes: [{
+                    type: 'line',
+                    x0: -0.5,
+                    x1: tickers.length - 0.5,
+                    y0: 0,
+                    y1: 0,
+                    line: {
+                        color: '#999',
+                        width: 2,
+                        dash: 'dash'
+                    }
+                }]
+            };
+
+            Plotly.newPlot('grafico-rentabilidade', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Erro ao carregar rentabilidade:', error));
+}
+
+function carregarEvolucao() {
+    fetch('{{ url_for("investimentos.api_evolucao_patrimonial") }}')
+        .then(response => response.json())
+        .then(data => {
+            const trace = {
+                type: 'scatter',
+                mode: 'lines+markers',
+                x: data.meses,
+                y: data.valores,
+                fill: 'tozeroy',
+                fillcolor: 'rgba(0, 102, 255, 0.1)',
+                line: {
+                    color: '#0066ff',
+                    width: 3
+                },
+                marker: {
+                    size: 8,
+                    color: '#0066ff'
+                },
+                hovertemplate: '<b>%{x}</b><br>' +
+                              'Patrimônio: R$ %{y:,.2f}<br>' +
+                              '<extra></extra>'
+            };
+
+            const layout = {
+                margin: { t: 20, b: 60, l: 80, r: 20 },
+                xaxis: {
+                    title: 'Mês',
+                    tickangle: -45
+                },
+                yaxis: {
+                    title: 'Patrimônio (R$)',
+                    tickformat: ',.2f'
+                },
+                showlegend: false,
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('grafico-evolucao', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Erro ao carregar evolução:', error));
+}
+</script>
+
+<style>
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #0066ff;
+}
+
+#cards-resumo .card {
+    transition: transform 0.2s;
+}
+
+#cards-resumo .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+</style>
+{% endblock %}

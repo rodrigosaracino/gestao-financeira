@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Investimentos - Gestão Financeira{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-graph-up"></i> Meus Investimentos</h2>
+                <div>
+                    <a href="{{ url_for('investimentos.relatorios') }}" class="btn btn-outline-info btn-sm me-2">
+                        <i class="bi bi-graph-up-arrow"></i> Relatórios
+                    </a>
+                    <button onclick="atualizarCotacoes()" class="btn btn-outline-primary btn-sm me-2">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar Cotações
+                    </button>
+                    <a href="{{ url_for('investimentos.adicionar') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Adicionar Ativo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas Gerais -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Valor Investido</h6>
+                    <h4 class="card-title">R$ {{ "{:,.2f}".format(stats.valor_investido).replace(',', '_').replace('.', ',').replace('_', '.') }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Valor Atual</h6>
+                    <h4 class="card-title">R$ {{ "{:,.2f}".format(stats.valor_atual).replace(',', '_').replace('.', ',').replace('_', '.') }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Rentabilidade</h6>
+                    <h4 class="card-title {% if stats.rentabilidade_reais >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        R$ {{ "{:,.2f}".format(stats.rentabilidade_reais).replace(',', '_').replace('.', ',').replace('_', '.') }}
+                    </h4>
+                    <small class="{% if stats.rentabilidade_percentual >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ "{:,.2f}".format(stats.rentabilidade_percentual) }}%
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total de Ativos</h6>
+                    <h4 class="card-title">{{ stats.total_ativos }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Ativos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Carteira de Ativos</h5>
+                </div>
+                <div class="card-body">
+                    {% if ativos %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Ticker</th>
+                                    <th>Nome</th>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Qtd</th>
+                                    <th class="text-end">Preço Médio</th>
+                                    <th class="text-end">Cotação Atual</th>
+                                    <th class="text-end">Valor Investido</th>
+                                    <th class="text-end">Valor Atual</th>
+                                    <th class="text-end">Rentabilidade</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ativo in ativos %}
+                                <tr>
+                                    <td><strong>{{ ativo.ticker }}</strong></td>
+                                    <td>{{ ativo.nome or '-' }}</td>
+                                    <td><span class="badge bg-secondary">{{ ativo.tipo.nome }}</span></td>
+                                    <td class="text-end">{{ "{:,.4f}".format(ativo.quantidade) }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(ativo.preco_medio).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end">
+                                        {% if ativo.ultimo_preco %}
+                                            R$ {{ "{:,.2f}".format(ativo.ultimo_preco).replace(',', '_').replace('.', ',').replace('_', '.') }}
+                                            {% if ativo.variacao_dia %}
+                                                <small class="{% if ativo.variacao_dia >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    ({{ "{:+.2f}".format(ativo.variacao_dia) }}%)
+                                                </small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(ativo.valor_investido()).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(ativo.valor_atual()).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end {% if ativo.rentabilidade_reais() >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        R$ {{ "{:+,.2f}".format(ativo.rentabilidade_reais()).replace(',', '_').replace('.', ',').replace('_', '.') }}
+                                        <br>
+                                        <small>({{ "{:+.2f}".format(ativo.rentabilidade_percentual()) }}%)</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="{{ url_for('investimentos.transacoes', ativo_id=ativo.id) }}" class="btn btn-sm btn-outline-primary" title="Transações">
+                                            <i class="bi bi-list-ul"></i>
+                                        </a>
+                                        <a href="{{ url_for('investimentos.editar', ativo_id=ativo.id) }}" class="btn btn-sm btn-outline-warning" title="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <form method="POST" action="{{ url_for('investimentos.excluir', ativo_id=ativo.id) }}" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este ativo?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Você ainda não possui ativos na carteira.
+                        <a href="{{ url_for('investimentos.adicionar') }}" class="alert-link">Adicione seu primeiro ativo</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function atualizarCotacoes() {
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Atualizando...';
+
+    fetch('{{ url_for("investimentos.atualizar_cotacoes") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro ao atualizar cotações: ' + data.message);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        alert('Erro ao atualizar cotações');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+}
+</script>
+{% endblock %}

@@ -375,3 +375,153 @@ class DepositoMeta(db.Model):
 
     def __repr__(self):
         return f'<DepositoMeta R$ {self.valor} - {self.data}>'
+
+
+class TipoAtivo(db.Model):
+    """Modelo para tipos de ativos (ações, FIIs, Tesouro Direto, etc)"""
+    __tablename__ = 'tipos_ativos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(50), nullable=False, unique=True)  # Ação, FII, Tesouro Direto, Renda Fixa, Cripto
+    descricao = db.Column(db.String(200))
+
+    # Relacionamentos
+    ativos = db.relationship('Ativo', backref='tipo', lazy=True)
+
+    def __repr__(self):
+        return f'<TipoAtivo {self.nome}>'
+
+
+class Ativo(db.Model):
+    """Modelo para ativos financeiros (ações, FIIs, etc)"""
+    __tablename__ = 'ativos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    tipo_ativo_id = db.Column(db.Integer, db.ForeignKey('tipos_ativos.id'), nullable=False)
+
+    # Identificação
+    ticker = db.Column(db.String(20), nullable=False)  # PETR4, BBAS3, MXRF11
+    nome = db.Column(db.String(200))  # Petrobras PN, Banco do Brasil ON, Maxi Renda FII
+    instituicao = db.Column(db.String(200))  # Corretora/Banco onde está investido
+
+    # Dados de aquisição
+    quantidade = db.Column(db.Numeric(10, 4), nullable=False, default=0)  # Permite fracionadas
+    preco_medio = db.Column(db.Numeric(10, 2), nullable=False)  # Preço médio de compra
+
+    # Cache da última cotação (para economizar API calls)
+    ultimo_preco = db.Column(db.Numeric(10, 2))
+    ultima_atualizacao = db.Column(db.DateTime)  # Quando foi atualizado
+    variacao_dia = db.Column(db.Numeric(10, 2))  # % de variação no dia
+
+    # Status
+    ativo = db.Column(db.Boolean, default=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    usuario = db.relationship('User', backref='ativos')
+    transacoes_ativo = db.relationship('TransacaoAtivo', backref='ativo', cascade='all, delete-orphan')
+    dividendos = db.relationship('Dividendo', backref='ativo', cascade='all, delete-orphan')
+
+    def valor_investido(self):
+        """Retorna o valor total investido"""
+        from decimal import Decimal
+        return Decimal(str(self.quantidade)) * Decimal(str(self.preco_medio))
+
+    def valor_atual(self):
+        """Retorna o valor atual do ativo"""
+        from decimal import Decimal
+        if self.ultimo_preco:
+            return Decimal(str(self.quantidade)) * Decimal(str(self.ultimo_preco))
+        return self.valor_investido()
+
+    def rentabilidade_percentual(self):
+        """Retorna a rentabilidade em %"""
+        investido = self.valor_investido()
+        if investido == 0:
+            return 0
+        atual = self.valor_atual()
+        return float(((atual - investido) / investido) * 100)
+
+    def rentabilidade_reais(self):
+        """Retorna a rentabilidade em R$"""
+        return self.valor_atual() - self.valor_investido()
+
+    def precisa_atualizar(self):
+        """Verifica se precisa atualizar cotação (cache > 15 min)"""
+        from datetime import timedelta
+        if not self.ultima_atualizacao:
+            return True
+        return datetime.utcnow() - self.ultima_atualizacao > timedelta(minutes=15)
+
+    def __repr__(self):
+        return f'<Ativo {self.ticker} - {self.quantidade}>'
+
+
+class TransacaoAtivo(db.Model):
+    """Modelo para transações de compra/venda de ativos"""
+    __tablename__ = 'transacoes_ativos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ativo_id = db.Column(db.Integer, db.ForeignKey('ativos.id'), nullable=False)
+
+    # Tipo de operação
+    tipo = db.Column(db.String(20), nullable=False)  # compra, venda
+
+    # Dados da transação
+    quantidade = db.Column(db.Numeric(10, 4), nullable=False)
+    preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
+    taxa_corretagem = db.Column(db.Numeric(10, 2), default=0)
+    outros_custos = db.Column(db.Numeric(10, 2), default=0)
+
+    # Data
+    data_operacao = db.Column(db.Date, nullable=False)
+
+    # Observações
+    observacao = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def valor_total(self):
+        """Valor total da operação (quantidade * preço + custos)"""
+        from decimal import Decimal
+        valor_base = Decimal(str(self.quantidade)) * Decimal(str(self.preco_unitario))
+        custos = Decimal(str(self.taxa_corretagem)) + Decimal(str(self.outros_custos))
+        return valor_base + custos
+
+    def __repr__(self):
+        return f'<TransacaoAtivo {self.tipo} {self.quantidade} - {self.data_operacao}>'
+
+
+class Dividendo(db.Model):
+    """Modelo para dividendos recebidos"""
+    __tablename__ = 'dividendos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ativo_id = db.Column(db.Integer, db.ForeignKey('ativos.id'), nullable=False)
+
+    # Tipo de provento
+    tipo = db.Column(db.String(20), nullable=False)  # dividendo, jcp, rendimento
+
+    # Valores
+    valor_por_acao = db.Column(db.Numeric(10, 4), nullable=False)
+    quantidade_acoes = db.Column(db.Numeric(10, 4), nullable=False)
+    valor_total = db.Column(db.Numeric(10, 2), nullable=False)
+
+    # Datas
+    data_com = db.Column(db.Date)  # Data COM (último dia para ter direito)
+    data_pagamento = db.Column(db.Date, nullable=False)
+
+    # Status
+    recebido = db.Column(db.Boolean, default=False)
+
+    # Observações
+    observacao = db.Column(db.String(200))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Dividendo {self.ativo.ticker} - R$ {self.valor_total}>'

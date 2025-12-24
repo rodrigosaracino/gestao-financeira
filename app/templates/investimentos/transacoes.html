@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Transações - {{ ativo.ticker }} - Investimentos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-list-ul"></i> Transações: {{ ativo.ticker }}</h2>
+                <div>
+                    <a href="{{ url_for('investimentos.adicionar_transacao', ativo_id=ativo.id) }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Nova Transação
+                    </a>
+                    <a href="{{ url_for('investimentos.index') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações do Ativo -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Nome:</strong> {{ ativo.nome or '-' }}
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Tipo:</strong> {{ ativo.tipo.nome }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Instituição:</strong> {{ ativo.instituicao or '-' }}
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Quantidade:</strong> {{ "{:,.4f}".format(ativo.quantidade) }}
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Preço Médio:</strong> R$ {{ "{:,.2f}".format(ativo.preco_medio).replace(',', '_').replace('.', ',').replace('_', '.') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Transações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Histórico de Transações</h5>
+                </div>
+                <div class="card-body">
+                    {% if transacoes %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Quantidade</th>
+                                    <th class="text-end">Preço Unitário</th>
+                                    <th class="text-end">Taxa Corretagem</th>
+                                    <th class="text-end">Outros Custos</th>
+                                    <th class="text-end">Valor Total</th>
+                                    <th>Observação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transacao in transacoes %}
+                                <tr>
+                                    <td>{{ transacao.data_operacao.strftime('%d/%m/%Y') }}</td>
+                                    <td>
+                                        {% if transacao.tipo == 'compra' %}
+                                            <span class="badge bg-success">Compra</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Venda</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ "{:,.4f}".format(transacao.quantidade) }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(transacao.preco_unitario).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(transacao.taxa_corretagem).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end">R$ {{ "{:,.2f}".format(transacao.outros_custos).replace(',', '_').replace('.', ',').replace('_', '.') }}</td>
+                                    <td class="text-end"><strong>R$ {{ "{:,.2f}".format(transacao.valor_total()).replace(',', '_').replace('.', ',').replace('_', '.') }}</strong></td>
+                                    <td>{{ transacao.observacao or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Nenhuma transação registrada para este ativo.
+                        <a href="{{ url_for('investimentos.adicionar_transacao', ativo_id=ativo.id) }}" class="alert-link">Adicione a primeira transação</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
