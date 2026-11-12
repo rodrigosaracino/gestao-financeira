@@ -257,3 +257,26 @@ def test_rate_limit_usa_ip_real(app):
     with app.test_request_context('/', headers={'CF-Connecting-IP': '200.150.10.20'},
                                   environ_base={'REMOTE_ADDR': '104.16.0.5'}):
         assert _chave_rate_limit() == '200.150.10.20'
+
+
+# ---------- Usuário desativado ----------
+
+def test_usuario_desativado_perde_sessao_aberta(app, usuarios, client_a):
+    from app.models import db, User
+    assert client_a.get('/transacoes').status_code == 200
+    with app.app_context():
+        db.session.get(User, usuarios[0]['user']).ativo = False
+        db.session.commit()
+    resp = client_a.get('/transacoes')
+    assert resp.status_code == 302 and '/login' in resp.headers['Location']
+
+
+def test_usuario_desativado_nao_consegue_logar(app, usuarios):
+    from app.models import db, User
+    from tests.conftest import login
+    with app.app_context():
+        db.session.get(User, usuarios[1]['user']).ativo = False
+        db.session.commit()
+    c = app.test_client()
+    login(c, usuarios[1])
+    assert c.get('/transacoes').status_code == 302

@@ -22,6 +22,11 @@ class User(UserMixin, db.Model):
     categorias = db.relationship('Categoria', backref='usuario', lazy=True, cascade='all, delete-orphan')
     cartoes = db.relationship('CartaoCredito', backref='usuario', lazy=True, cascade='all, delete-orphan')
 
+    @property
+    def is_active(self):
+        """Flask-Login: usuário desativado não pode logar nem manter sessão."""
+        return bool(self.ativo)
+
     def set_password(self, password):
         """Define a senha do usuário (criptografada)"""
         self.senha_hash = generate_password_hash(password)
