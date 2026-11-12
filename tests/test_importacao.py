@@ -294,7 +294,7 @@ INTER_CSV = (
     'Extrato Conta Corrente \nConta ;123456\nPeríodo ;01/01/2026 a 12/11/2026\nSaldo ;1.150,00\n\n'
     'Data Lançamento;Histórico;Descrição;Valor;Saldo\n'
     '03/11/2026;Pix recebido;Fulano de Tal;200,00;1.150,00\n'
-    '02/11/2026;Pix enviado ;Rodrigo Saracino;-50,00;950,00\n'
+    '02/11/2026;Pix enviado ;Maria Exemplo Silva;-50,00;950,00\n'
     '01/11/2026;Pagamento efetuado;Conta de luz;-0,00;1.000,00\n'
 )
 
@@ -313,10 +313,10 @@ def test_transferencia_entre_contas_proprias_tem_categoria_propria(app, usuarios
     a, _ = usuarios
     with app.app_context():
         conc, _ = importacao.analisar_extrato(a['user'], INTER_CSV.encode('utf-8'), 'Extrato.csv',
-                                              conta_id=a['conta'], titular='Rodrigo Saracino')
+                                              conta_id=a['conta'], titular='Maria Exemplo Silva')
         r = importacao.aplicar_conciliacao(conc)
         cats = {t.descricao: t.categoria.nome for t in Transacao.query.filter_by(conta_id=a['conta'])}
-        assert cats['Pix enviado - Rodrigo Saracino'] == 'Transferência enviada (minhas contas)'
+        assert cats['Pix enviado - Maria Exemplo Silva'] == 'Transferência enviada (minhas contas)'
         assert cats['Pix recebido - Fulano de Tal'] == 'Outras Receitas'
         assert r['saldo_banco'] == Decimal('1150.00')
 
@@ -356,10 +356,10 @@ def test_transferencia_recebida_e_enviada_no_mesmo_extrato(app, usuarios):
     from app.models import Transacao
     from app.services import importacao
     a, _ = usuarios
-    csv = INTER_CSV.replace('Pix recebido;Fulano de Tal', 'Pix recebido;Rodrigo Saracino')
+    csv = INTER_CSV.replace('Pix recebido;Fulano de Tal', 'Pix recebido;Maria Exemplo Silva')
     with app.app_context():
         conc, _ = importacao.analisar_extrato(a['user'], csv.encode('utf-8'), 'Extrato.csv',
-                                              conta_id=a['conta'], titular='Rodrigo Saracino')
+                                              conta_id=a['conta'], titular='Maria Exemplo Silva')
         importacao.aplicar_conciliacao(conc)
         nomes = {t.tipo: t.categoria.nome for t in Transacao.query.filter_by(conta_id=a['conta'])}
         assert nomes == {'receita': 'Transferência recebida (minhas contas)',
