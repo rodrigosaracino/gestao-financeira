@@ -180,12 +180,14 @@ def test_fatura_cartao_lanca_na_fatura_e_limite(app, usuarios):
         assert sugest['PAGAMENTO EFETUADO'] == 'ignorar'
         importacao.aplicar_conciliacao(conc)
         cartao = db.session.get(CartaoCredito, a['cartao'])
-        # compras 59.90 + 300 - 40 = 319.90; o "PAGAMENTO EFETUADO" de 1200 (fatura anterior) libera o limite
-        assert cartao.limite_utilizado == Decimal('0')
+        # compras 59.90 + 300 - 40 = 319.90, + 8 parcelas futuras de 300 (PARC 02/10) = 2719.90;
+        # o "PAGAMENTO EFETUADO" de 1200 (fatura anterior) libera parte do limite
+        assert cartao.limite_utilizado == Decimal('1519.90')
         assert db.session.get(Conta, a['conta']).saldo_atual == Decimal('1000')  # conta não muda
-        parc = Transacao.query.filter(Transacao.descricao.like('%PARC%')).one()
+        parc = Transacao.query.filter(Transacao.descricao.like('%PARC 02%')).one()
         assert (parc.numero_parcela, parc.total_parcelas, parc.forma_pagamento) == (2, 10, 'cartao_credito')
-        assert sum(f.valor_total for f in Fatura.query.filter_by(cartao_id=a['cartao'])) == Decimal('319.90')
+        assert sum(f.valor_total for f in Fatura.query.filter_by(cartao_id=a['cartao'])) == Decimal('2719.90')
+        assert Transacao.query.filter(Transacao.id_externo.like('PROJ%')).count() == 8
 
 
 def test_fatura_sem_cartao_pede_cartao(app, usuarios):
@@ -336,8 +338,8 @@ def test_pagamento_fatura_libera_limite_e_baixa_fatura(app, usuarios):
         c1, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao.ofx'), 'f1.ofx', cartao_id=a['cartao'])
         importacao.aplicar_conciliacao(c1)
         cartao = db.session.get(CartaoCredito, a['cartao'])
-        # mês 1: 59.90 + 300 - 40 = 319.90; o pagamento de 1200 (de uma fatura anterior não importada) libera limite
-        assert cartao.limite_utilizado == Decimal('0')
+        # mês 1: 319.90 + 2400 em parcelas futuras; o pagamento de 1200 libera parte do limite
+        assert cartao.limite_utilizado == Decimal('1519.90')
         c2, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao_mes2.ofx'), 'f2.ofx', cartao_id=a['cartao'])
         r2 = importacao.aplicar_conciliacao(c2)
         assert r2['por_status'].get('pagamento') == 1
@@ -395,3 +397,69 @@ def test_saldo_em_atraso_da_fatura_e_ignorado(app, usuarios):
         importacao.aplicar_conciliacao(conc)
         assert [t.descricao for t in Transacao.query.filter_by(cartao_credito_id=a['cartao'])] == ['Padaria']
         assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('0')  # 50 - 100 -> 0
+
+
+# ---------------------------------------------------------------- projeção de parcelas
+
+def _ofx_cartao(itens):
+    corpo = ''.join(f'<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>{d}<TRNAMT>-{v}<FITID>{fid}<MEMO>{m}</STMTTRN>'
+                    for d, v, fid, m in itens)
+    return ('OFXHEADER:100\n<OFX><CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS><CCACCTFROM><ACCTID>abc</CCACCTFROM>'
+            f'<BANKTRANLIST>{corpo}</BANKTRANLIST></CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>').encode()
+
+
+def test_parcelas_futuras_sao_projetadas_e_confirmadas_sem_duplicar(app, usuarios):
+    from app.models import db, CartaoCredito, Fatura, Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        mes1 = _ofx_cartao([('20261001', '100.00', 'P1', 'Loja X - Parcela 2/4')])
+        c1, _ = importacao.analisar_extrato(a['user'], mes1, 'out.ofx', cartao_id=a['cartao'])
+        importacao.aplicar_conciliacao(c1)
+        parcelas = Transacao.query.filter_by(cartao_credito_id=a['cartao']).order_by(Transacao.data).all()
+        assert [(t.numero_parcela, t.data.month) for t in parcelas] == [(2, 10), (3, 11), (4, 12)]
+        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('300')
+        assert Fatura.query.filter_by(cartao_id=a['cartao'], mes_referencia=12).one().valor_total == Decimal('100')
+
+        # chega a fatura real de novembro, com centavos diferentes
+        mes2 = _ofx_cartao([('20261102', '100.01', 'P2', 'Loja X - Parcela 3/4')])
+        c2, _ = importacao.analisar_extrato(a['user'], mes2, 'nov.ofx', cartao_id=a['cartao'])
+        item = c2.itens[0]
+        prevista_nov = [t for t in parcelas if t.numero_parcela == 3][0]
+        assert item.acao_sugerida == 'conciliar' and item.transacao_id == prevista_nov.id
+        importacao.aplicar_conciliacao(c2)
+        parcelas = Transacao.query.filter_by(cartao_credito_id=a['cartao']).order_by(Transacao.data).all()
+        assert len(parcelas) == 3
+        nov = [t for t in parcelas if t.numero_parcela == 3][0]
+        assert nov.valor == Decimal('100.01') and not nov.id_externo.startswith('PROJ')
+        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('300.01')
+
+        # reimportar novembro não duplica
+        c3, _ = importacao.analisar_extrato(a['user'], mes2, 'nov.ofx', cartao_id=a['cartao'])
+        assert importacao.aplicar_conciliacao(c3)['por_status'] == {'duplicado': 1}
+        # desfazer outubro remove a parcela 2 e a prevista 4 (a 3 agora é de novembro)
+        importacao.desfazer_conciliacao(c1)
+        assert sorted(t.numero_parcela for t in Transacao.query.filter_by(cartao_credito_id=a['cartao'])) == [3]
+
+
+def test_projetar_historico_cli(app, usuarios):
+    from app.models import db, Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        mes1 = _ofx_cartao([('20261001', '50.00', 'Q1', 'Curso Y - Parcela 1/3')])
+        c1, _ = importacao.analisar_extrato(a['user'], mes1, 'out.ofx', cartao_id=a['cartao'])
+        importacao.aplicar_conciliacao(c1)
+        # simula histórico antigo sem projeção: apaga as previstas
+        for t in Transacao.query.filter(Transacao.id_externo.like('PROJ%')).all():
+            db.session.delete(t)
+        db.session.commit()
+    runner = app.test_cli_runner()
+    r = runner.invoke(args=['projetar-parcelas', '--usuario', a['email'], '--cartao', str(a['cartao'])])
+    assert 'SIMULAÇÃO' in r.output and '2 parcela' in r.output, r.output
+    with app.app_context():
+        assert Transacao.query.filter(Transacao.id_externo.like('PROJ%')).count() == 0
+    r = runner.invoke(args=['projetar-parcelas', '--usuario', a['email'], '--cartao', str(a['cartao']), '--aplicar'])
+    assert r.exit_code == 0 and '2 parcela' in r.output
+    r = runner.invoke(args=['projetar-parcelas', '--usuario', a['email'], '--cartao', str(a['cartao']), '--aplicar'])
+    assert '0 parcela' in r.output  # idempotente

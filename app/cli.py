@@ -147,7 +147,35 @@ def redefinir_senha(usuario):
     click.echo(f'Senha de {user.nome} redefinida. Já pode entrar no sistema.')
 
 
+@click.command('projetar-parcelas')
+@click.option('--usuario', required=True)
+@click.option('--cartao', required=True, help='ID ou parte do nome do cartão.')
+@click.option('--aplicar', is_flag=True, help='Grava de fato. Sem isso é só simulação.')
+@with_appcontext
+def projetar_parcelas_cmd(usuario, cartao, aplicar):
+    """Lança nas faturas futuras as parcelas que ainda vão vencer."""
+    from collections import defaultdict
+    user = _usuario(usuario)
+    cartao_obj = db.session.get(CartaoCredito, _resolver(CartaoCredito, user.id, cartao))
+    antes = cartao_obj.limite_utilizado
+    criadas = importacao.projetar_historico(cartao_obj)
+    por_mes = defaultdict(Decimal)
+    from app.models import Transacao
+    for t in Transacao.query.filter(Transacao.cartao_credito_id == cartao_obj.id,
+                                    Transacao.id_externo.like('PROJ%')).all():
+        por_mes[t.data.strftime('%Y-%m')] += t.valor
+    click.echo(('PROJEÇÃO GRAVADA' if aplicar else 'SIMULAÇÃO (nada foi gravado)') + f' — {criadas} parcela(s) nova(s)')
+    for mes in sorted(por_mes):
+        click.echo(f'  {mes}: {_fmt(por_mes[mes])}')
+    click.echo(f'Limite usado: {_fmt(antes)} -> {_fmt(cartao_obj.limite_utilizado)}')
+    if aplicar:
+        db.session.commit()
+    else:
+        db.session.rollback()
+
+
 def registrar(app):
+    app.cli.add_command(projetar_parcelas_cmd)
     app.cli.add_command(importar_extrato)
     app.cli.add_command(listar_contas)
     app.cli.add_command(redefinir_senha)
