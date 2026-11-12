@@ -463,3 +463,23 @@ def test_projetar_historico_cli(app, usuarios):
     assert r.exit_code == 0 and '2 parcela' in r.output
     r = runner.invoke(args=['projetar-parcelas', '--usuario', a['email'], '--cartao', str(a['cartao']), '--aplicar'])
     assert '0 parcela' in r.output  # idempotente
+
+
+def test_projecao_com_centavos_diferentes_nao_duplica_nem_preve_passado(app, usuarios):
+    from app.models import Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        # 1ª parcela 33.34, demais 33.33 (arredondamento do banco); out tem a 1/3, nov tem a 2/3
+        for nome, d, v, fid, m in [('out.ofx', '20261001', '33.34', 'R1', 'Tenis Z - Parcela 1/3'),
+                                   ('nov.ofx', '20261101', '33.33', 'R2', 'Tenis Z - Parcela 2/3')]:
+            c, _ = importacao.analisar_extrato(a['user'], _ofx_cartao([(d, v, fid, m)]), nome, cartao_id=a['cartao'])
+            importacao.aplicar_conciliacao(c)
+        assert importacao.projetar_historico(db_cartao(a)) == 0  # 3/3 já foi prevista ao importar
+        parcelas = sorted((t.numero_parcela, t.data.month) for t in Transacao.query.filter_by(cartao_credito_id=a['cartao']))
+        assert parcelas == [(1, 10), (2, 11), (3, 12)]
+
+
+def db_cartao(a):
+    from app.models import db, CartaoCredito
+    return db.session.get(CartaoCredito, a['cartao'])
