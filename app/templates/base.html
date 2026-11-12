@@ -90,9 +90,10 @@
                 </ul>
                 {% if current_user.is_authenticated %}
                 <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-2 mt-3 mt-lg-0">
-                    <span class="navbar-text" style="color: var(--color-text-secondary);">
-                        <i class="bi bi-person-circle"></i> {{ current_user.nome }}
-                    </span>
+                    <a href="{{ url_for('auth.alterar_senha') }}" class="navbar-text text-decoration-none"
+                       style="color: var(--color-text-secondary);" title="Alterar senha">
+                        <i class="bi bi-person-circle"></i> {{ current_user.nome }} <i class="bi bi-key small"></i>
+                    </a>
                     <form method="POST" action="{{ url_for('auth.logout') }}" class="d-inline m-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-outline-danger btn-sm w-100">
