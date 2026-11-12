@@ -120,4 +120,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth.auth)
     app.register_blueprint(investimentos.investimentos_bp)
 
+    from app import cli
+    cli.registrar(app)
+
     return app

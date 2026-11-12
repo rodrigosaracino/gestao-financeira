@@ -168,6 +168,39 @@ python run.py
 
 A aplicação irá recarregar automaticamente ao detectar mudanças no código.
 
+## 📥 Importação de extrato e fatura
+
+Menu **Conciliação → Nova**: envie o extrato da conta ou a fatura do cartão em **OFX** (recomendado), **PDF** ou **CSV**.
+
+- Lançamentos que já foram importados antes são reconhecidos (pelo FITID do OFX ou por data+valor+descrição) e **não duplicam**.
+- Lançamentos que você já tinha cadastrado à mão são **conciliados**: a transação é marcada como paga, em vez de criar outra.
+- Novos lançamentos são importados com a categoria sugerida pelo seu histórico ou por palavras-chave (iFood, Uber, posto, farmácia…). Na dúvida, vão para "Outros".
+- No extrato da conta, o saldo é atualizado e comparado com o saldo informado pelo banco.
+- Na fatura do cartão, as compras entram na fatura do mês e no limite. Parcelas como "PARC 02/10" são reconhecidas, e o "pagamento efetuado" é ignorado (ele já aparece no extrato da conta).
+- Excluir uma importação desfaz tudo o que ela criou.
+
+### Pela linha de comando
+
+```bash
+# simulação: mostra o que seria feito, sem gravar nada
+flask importar-extrato extrato.ofx --usuario voce@email.com --conta "Itaú" --detalhado
+# grava de fato
+flask importar-extrato extrato.ofx --usuario voce@email.com --conta "Itaú" --aplicar
+# fatura do cartão
+flask importar-extrato fatura.ofx --usuario voce@email.com --cartao "Nubank" --aplicar
+# ids e nomes de contas e cartões
+flask listar-contas --usuario voce@email.com
+```
+
+Em produção: `docker compose exec web flask importar-extrato /caminho/no/container ...`
+
+## 🧪 Testes
+
+```bash
+pip install -r requirements.txt pytest
+pytest
+```
+
 ## Segurança
 
 - Senhas são hasheadas usando Werkzeug Security

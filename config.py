@@ -62,7 +62,7 @@ class Config:
 
     # Upload Security
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max
-    ALLOWED_EXTENSIONS = {'ofx', 'pdf'}
+    ALLOWED_EXTENSIONS = {'ofx', 'pdf', 'csv', 'txt'}
     MAX_LINHAS_EXTRATO = 5000
 
     # Login Security
