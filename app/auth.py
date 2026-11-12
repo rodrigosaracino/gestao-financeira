@@ -76,6 +76,18 @@ def criar_categorias_padrao(user_id):
 auth = Blueprint('auth', __name__)
 
 
+def validar_senha_forte(senha):
+    """Retorna a mensagem de erro, ou None se a senha atende às regras."""
+    if not senha or len(senha) < 8:
+        return 'A senha deve ter pelo menos 8 caracteres.'
+    if len(senha) > 128:
+        return 'A senha deve ter no máximo 128 caracteres.'
+    if not (any(c.isupper() for c in senha) and any(c.islower() for c in senha)
+            and any(c.isdigit() for c in senha)):
+        return 'A senha deve conter letras maiúsculas, minúsculas e números.'
+    return None
+
+
 @auth.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
 def login():
@@ -172,17 +184,9 @@ def registro():
             return redirect(url_for('auth.registro'))
 
         # Validar senha forte
-        if len(senha) < 8:
-            flash('A senha deve ter pelo menos 8 caracteres.', 'error')
-            return redirect(url_for('auth.registro'))
-
-        # Verificar complexidade da senha
-        has_upper = any(c.isupper() for c in senha)
-        has_lower = any(c.islower() for c in senha)
-        has_digit = any(c.isdigit() for c in senha)
-
-        if not (has_upper and has_lower and has_digit):
-            flash('A senha deve conter letras maiúsculas, minúsculas e números.', 'error')
+        erro_senha = validar_senha_forte(senha)
+        if erro_senha:
+            flash(erro_senha, 'error')
             return redirect(url_for('auth.registro'))
 
         if senha != confirmar_senha:
@@ -225,3 +229,37 @@ def logout():
     logout_user()
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('auth.login'))
+
+
+@auth.route('/alterar-senha', methods=['GET', 'POST'])
+@login_required
+@limiter.limit("10 per hour")
+def alterar_senha():
+    """Troca de senha do usuário logado (exige a senha atual)"""
+    if request.method == 'POST':
+        atual = request.form.get('senha_atual', '')
+        nova = request.form.get('nova_senha', '')
+        confirmar = request.form.get('confirmar_senha', '')
+
+        if not current_user.check_password(atual):
+            log_suspicious_activity('Troca de senha com senha atual incorreta', level='warning')
+            flash('Senha atual incorreta.', 'error')
+            return redirect(url_for('auth.alterar_senha'))
+        erro = validar_senha_forte(nova)
+        if erro:
+            flash(erro, 'error')
+            return redirect(url_for('auth.alterar_senha'))
+        if nova != confirmar:
+            flash('As senhas não coincidem.', 'error')
+            return redirect(url_for('auth.alterar_senha'))
+        if nova == atual:
+            flash('A nova senha deve ser diferente da atual.', 'error')
+            return redirect(url_for('auth.alterar_senha'))
+
+        current_user.set_password(nova)
+        db.session.commit()
+        log_suspicious_activity('Senha alterada pelo usuário', level='info')
+        flash('Senha alterada com sucesso!', 'success')
+        return redirect(url_for('main.index'))
+
+    return render_template('auth/alterar_senha.html')

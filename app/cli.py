@@ -125,6 +125,27 @@ def listar_contas(usuario):
         click.echo(f'cartao {c.id:>4}  {c.nome}  final {c.numero_cartao or "-"}{"" if c.ativo else "  (inativo)"}')
 
 
+@click.command('redefinir-senha')
+@click.option('--usuario', required=True, help='E-mail do usuário.')
+@with_appcontext
+def redefinir_senha(usuario):
+    """Define uma nova senha (digitada no terminal, sem aparecer na tela)."""
+    from app.auth import validar_senha_forte
+    user = _usuario(usuario)
+    if not user.ativo:
+        raise click.ClickException('Usuário desativado. Reative antes de redefinir a senha.')
+    senha = click.prompt('Nova senha', hide_input=True, confirmation_prompt='Repita a nova senha')
+    erro = validar_senha_forte(senha)
+    if erro:
+        raise click.ClickException(erro)
+    user.set_password(senha)
+    db.session.commit()
+    import logging
+    logging.getLogger('security').info(f'Senha redefinida via CLI para o usuário {user.id}')
+    click.echo(f'Senha de {user.nome} redefinida. Já pode entrar no sistema.')
+
+
 def registrar(app):
     app.cli.add_command(importar_extrato)
     app.cli.add_command(listar_contas)
+    app.cli.add_command(redefinir_senha)
