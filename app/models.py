@@ -45,6 +45,8 @@ class Conta(db.Model):
     ativa = db.Column(db.Boolean, default=True)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Identificador da conta no banco (ACCTID do OFX) - usado para reconhecer o extrato
+    id_banco = db.Column(db.String(50), nullable=True)
 
     transacoes = db.relationship('Transacao', backref='conta', lazy=True)
 
@@ -105,6 +107,10 @@ class Transacao(db.Model):
     conta_id = db.Column(db.Integer, db.ForeignKey('contas.id'), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=False)
     fatura_id = db.Column(db.Integer, db.ForeignKey('faturas.id'), nullable=True)
+
+    # Importação de extrato: id único do lançamento no banco (FITID) ou hash
+    id_externo = db.Column(db.String(64), nullable=True, index=True)
+    conciliacao_origem_id = db.Column(db.Integer, nullable=True, index=True)
 
     def pode_marcar_pago(self):
         """Verifica se a transação pode ser marcada como paga"""
@@ -176,10 +182,14 @@ class ConciliacaoBancaria(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     conta_id = db.Column(db.Integer, db.ForeignKey('contas.id'), nullable=False)
+    # Preenchido quando o extrato é a fatura de um cartão (conta_id = conta que paga)
+    cartao_credito_id = db.Column(db.Integer, db.ForeignKey('cartoes_credito.id'), nullable=True)
 
     # Informações do arquivo
     arquivo_nome = db.Column(db.String(200), nullable=False)
-    formato = db.Column(db.String(10), nullable=False)  # OFX, CSV
+    formato = db.Column(db.String(10), nullable=False)  # OFX, CSV, PDF
+    hash_arquivo = db.Column(db.String(64), nullable=True, index=True)
+    saldo_extrato = db.Column(db.Numeric(12, 2), nullable=True)  # saldo final informado pelo banco
 
     # Status e estatísticas
     data_upload = db.Column(db.DateTime, default=datetime.utcnow)
@@ -195,6 +205,7 @@ class ConciliacaoBancaria(db.Model):
     # Relacionamentos
     usuario = db.relationship('User', backref='conciliacoes')
     conta = db.relationship('Conta', backref='conciliacoes')
+    cartao = db.relationship('CartaoCredito', backref='conciliacoes')
     itens = db.relationship('ItemConciliacao', backref='conciliacao', lazy=True, cascade='all, delete-orphan')
 
     def __repr__(self):
@@ -217,9 +228,13 @@ class ItemConciliacao(db.Model):
     # Dados extras do arquivo
     numero_documento = db.Column(db.String(100), nullable=True)
     saldo_apos = db.Column(db.Numeric(10, 2), nullable=True)
+    id_externo = db.Column(db.String(64), nullable=True)
+    numero_parcela = db.Column(db.Integer, nullable=True)
+    total_parcelas = db.Column(db.Integer, nullable=True)
+    acao_sugerida = db.Column(db.String(20), nullable=True)  # conciliar, importar, ignorar
 
     # Status de conciliação
-    status = db.Column(db.String(20), default='pendente')  # pendente, conciliado, importado, ignorado
+    status = db.Column(db.String(20), default='pendente')  # pendente, duplicado, conciliado, importado, ignorado
     transacao_id = db.Column(db.Integer, db.ForeignKey('transacoes.id'), nullable=True)  # Se foi conciliado com transação existente
     categoria_sugerida_id = db.Column(db.Integer, db.ForeignKey('categorias.id'), nullable=True)
 

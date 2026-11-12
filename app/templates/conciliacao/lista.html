@@ -41,7 +41,7 @@
                                 <i class="bi bi-file-earmark-text"></i>
                                 {{ conc.arquivo_nome }}
                             </td>
-                            <td>{{ conc.conta.nome }}</td>
+                            <td>{% if conc.cartao %}<i class="bi bi-credit-card"></i> {{ conc.cartao.nome }}{% else %}{{ conc.conta.nome }}{% endif %}</td>
                             <td>
                                 <span class="badge bg-secondary">{{ conc.formato }}</span>
                             </td>
@@ -81,7 +81,7 @@
                                 <form action="{{ url_for('main.conciliacao_excluir', id=conc.id) }}"
                                       method="POST"
                                       style="display: inline;"
-                                      onsubmit="return confirm('Tem certeza que deseja excluir esta conciliação?');">
+                                      onsubmit="return confirm('Excluir esta conciliação? As transações que ela importou também serão removidas e o saldo será restaurado.');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-danger">
                                         <i class="bi bi-trash"></i>
@@ -166,7 +166,7 @@
                     {% endif %}
                     <form action="{{ url_for('main.conciliacao_excluir', id=conc.id) }}"
                           method="POST"
-                          onsubmit="return confirm('Tem certeza que deseja excluir esta conciliação?');">
+                          onsubmit="return confirm('Excluir esta conciliação? As transações que ela importou também serão removidas e o saldo será restaurado.');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-danger btn-sm">
                             <i class="bi bi-trash"></i>

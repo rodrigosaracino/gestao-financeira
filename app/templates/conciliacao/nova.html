@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Nova Conciliação Bancária{% endblock %}
+{% block title %}Importar Extrato{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
@@ -10,92 +10,111 @@
                 <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-sm btn-outline-secondary me-3">
                     <i class="bi bi-arrow-left"></i>
                 </a>
-                <h2 class="mb-0">
-                    <i class="bi bi-upload"></i> Nova Conciliação Bancária
-                </h2>
+                <h2 class="mb-0"><i class="bi bi-upload"></i> Importar extrato ou fatura</h2>
             </div>
 
             <div class="card">
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="mb-4">
-                            <label for="conta_id" class="form-label">
-                                <strong>Selecione a Conta</strong>
-                            </label>
-                            <select name="conta_id" id="conta_id" class="form-select" required>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>O que você está importando?</strong></label>
+                            <div class="d-flex gap-2" role="group">
+                                <input type="radio" class="btn-check" name="tipo_destino" id="destino_conta" value="conta" checked>
+                                <label class="btn btn-outline-primary flex-grow-1" for="destino_conta">
+                                    <i class="bi bi-bank"></i> Extrato da conta
+                                </label>
+                                <input type="radio" class="btn-check" name="tipo_destino" id="destino_cartao" value="cartao">
+                                <label class="btn btn-outline-primary flex-grow-1" for="destino_cartao">
+                                    <i class="bi bi-credit-card"></i> Fatura do cartão
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="bloco_cartao" style="display:none;">
+                            <label for="cartao_id" class="form-label"><strong>Cartão</strong></label>
+                            <select name="cartao_id" id="cartao_id" class="form-select">
                                 <option value="">-- Selecione --</option>
+                                {% for cartao in cartoes %}
+                                <option value="{{ cartao.id }}">{{ cartao.nome }}{% if cartao.numero_cartao %} (final {{ cartao.numero_cartao }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">As compras entram na fatura do mês e no limite do cartão; parcelas (ex.: "PARC 02/10") são reconhecidas.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="conta_id" class="form-label"><strong id="rotulo_conta">Conta</strong></label>
+                            <select name="conta_id" id="conta_id" class="form-select">
+                                <option value="">{{ '-- Detectar automaticamente --' }}</option>
                                 {% for conta in contas %}
                                 <option value="{{ conta.id }}">
                                     {{ conta.nome }} ({{ conta.tipo|capitalize }}) - Saldo: R$ {{ "%.2f"|format(conta.saldo_atual) }}
                                 </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text">
-                                Selecione a conta bancária correspondente ao extrato que será importado.
+                            <div class="form-text" id="ajuda_conta">
+                                Depois da primeira importação de um OFX, a conta é reconhecida automaticamente.
                             </div>
                         </div>
 
                         <div class="mb-4">
-                            <label for="arquivo" class="form-label">
-                                <strong>Arquivo do Extrato</strong>
-                            </label>
-                            <input type="file"
-                                   class="form-control"
-                                   id="arquivo"
-                                   name="arquivo"
-                                   accept=".ofx,.csv,.OFX,.CSV"
-                                   required>
-                            <div class="form-text">
-                                Formatos aceitos: OFX, CSV
-                            </div>
+                            <label for="arquivo" class="form-label"><strong>Arquivo</strong></label>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo"
+                                   accept=".ofx,.OFX,.pdf,.PDF,.csv,.CSV" required>
+                            <div class="form-text">OFX (recomendado), PDF ou CSV — até 16 MB.</div>
                         </div>
 
                         <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Dica:</strong> O sistema tentará identificar automaticamente as transações já cadastradas,
-                            evitando duplicações. Você poderá revisar todas as sugestões antes de confirmar.
+                            <i class="bi bi-shield-check"></i>
+                            Lançamentos que já foram importados antes são reconhecidos e <strong>não são duplicados</strong>.
+                            Nada é gravado antes de você revisar e confirmar.
                         </div>
 
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="bi bi-upload"></i> Fazer Upload e Processar
+                                <i class="bi bi-upload"></i> Ler arquivo
                             </button>
-                            <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-outline-secondary">
-                                Cancelar
-                            </a>
+                            <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
                         </div>
                     </form>
                 </div>
             </div>
 
             <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="bi bi-lightbulb"></i> Como obter o extrato bancário
-                    </h5>
-                </div>
+                <div class="card-header"><h5 class="mb-0"><i class="bi bi-lightbulb"></i> Como obter o arquivo</h5></div>
                 <div class="card-body">
-                    <h6>Formato OFX (Recomendado)</h6>
-                    <p>A maioria dos bancos brasileiros permite exportar o extrato em formato OFX:</p>
-                    <ul>
-                        <li>Acesse o internet banking do seu banco</li>
-                        <li>Vá até "Extratos" ou "Movimentação"</li>
-                        <li>Selecione o período desejado</li>
-                        <li>Procure a opção "Exportar" ou "Download"</li>
-                        <li>Escolha o formato OFX ou "Money"</li>
-                    </ul>
-
-                    <h6 class="mt-3">Formato CSV</h6>
-                    <p>Caso seu banco não ofereça OFX, use CSV:</p>
-                    <ul>
-                        <li>Exporte o extrato em formato CSV ou Excel</li>
-                        <li>Se for Excel, salve como CSV</li>
-                        <li>O arquivo deve conter pelo menos: data, descrição e valor</li>
-                    </ul>
+                    <h6>OFX (recomendado)</h6>
+                    <p class="mb-2">No internet banking ou app: <em>Extrato</em> → escolha o período → <em>Exportar</em> → formato <strong>OFX</strong> (às vezes chamado "Money" ou "Quicken"). Para o cartão, abra a fatura e exporte em OFX.</p>
+                    <h6>PDF</h6>
+                    <p class="mb-2">Use o PDF original baixado do banco (não escaneado nem foto). A leitura é automática, mas confira a revisão com atenção.</p>
+                    <h6>CSV</h6>
+                    <p class="mb-0">Precisa ter colunas de data, descrição e valor (ou crédito/débito).</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var blocoCartao = document.getElementById('bloco_cartao');
+    var rotulo = document.getElementById('rotulo_conta');
+    var ajuda = document.getElementById('ajuda_conta');
+    var cartao = document.getElementById('cartao_id');
+    function atualizar() {
+        var ehCartao = document.getElementById('destino_cartao').checked;
+        blocoCartao.style.display = ehCartao ? '' : 'none';
+        cartao.required = ehCartao;
+        if (!ehCartao) cartao.value = '';
+        rotulo.textContent = ehCartao ? 'Conta que paga a fatura' : 'Conta';
+        ajuda.textContent = ehCartao
+            ? 'Se não escolher, será usada sua primeira conta ativa.'
+            : 'Depois da primeira importação de um OFX, a conta é reconhecida automaticamente.';
+    }
+    document.getElementById('destino_conta').addEventListener('change', atualizar);
+    document.getElementById('destino_cartao').addEventListener('change', atualizar);
+    atualizar();
+})();
+</script>
 {% endblock %}

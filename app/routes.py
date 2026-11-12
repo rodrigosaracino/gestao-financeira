@@ -6,8 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, extract
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
-from app.parsers import parse_file, detect_format
-from app.matching import processar_matching, estatisticas_matching
+from app.services import importacao
 from calendar import monthrange
 from collections import defaultdict
 import calendar
@@ -1707,242 +1706,109 @@ def conciliacao_lista():
 @bp.route('/conciliacao/nova', methods=['GET', 'POST'])
 @login_required
 def conciliacao_nova():
-    """Upload de arquivo para conciliação"""
-    if request.method == 'POST':
-        # Validar se arquivo foi enviado
-        if 'arquivo' not in request.files:
-            flash('Nenhum arquivo foi enviado', 'danger')
-            return redirect(request.url)
+    """Upload de extrato (conta) ou fatura (cartão) em OFX, PDF ou CSV"""
+    contas = Conta.query.filter_by(ativa=True, user_id=current_user.id).all()
+    cartoes = CartaoCredito.query.filter_by(ativo=True, user_id=current_user.id).all()
 
-        arquivo = request.files['arquivo']
-        if arquivo.filename == '':
+    if request.method == 'POST':
+        arquivo = request.files.get('arquivo')
+        if not arquivo or not arquivo.filename:
             flash('Nenhum arquivo foi selecionado', 'danger')
             return redirect(request.url)
 
-        # Obter conta selecionada
-        conta_id = request.form.get('conta_id', type=int)
-        if not conta_id:
-            flash('Selecione uma conta', 'danger')
-            return redirect(request.url)
-
-        # Verificar se conta pertence ao usuário
-        conta = Conta.query.filter_by(id=conta_id, user_id=current_user.id).first()
-        if not conta:
-            flash('Conta inválida', 'danger')
-            return redirect(url_for('main.conciliacao_nova'))
-
         try:
-            # Ler conteúdo do arquivo
-            arquivo_content = arquivo.read()
-            arquivo_nome = secure_filename(arquivo.filename)
-
-            # Detectar formato
-            formato = detect_format(arquivo_content)
-            if formato == 'UNKNOWN':
-                flash('Formato de arquivo não reconhecido. Use OFX ou CSV.', 'danger')
-                return redirect(request.url)
-
-            # Parsear arquivo
-            resultado = parse_file(arquivo_content, formato)
-
-            if resultado['total'] == 0:
-                flash('Nenhuma transação encontrada no arquivo', 'warning')
-                return redirect(request.url)
-
-            # Criar conciliação
-            conciliacao = ConciliacaoBancaria(
-                user_id=current_user.id,
-                conta_id=conta_id,
-                arquivo_nome=arquivo_nome,
-                formato=formato,
-                status='processando',
-                total_linhas=resultado['total'],
-                data_inicio=resultado['date_range'][0],
-                data_fim=resultado['date_range'][1]
+            conciliacao, avisos = importacao.analisar_extrato(
+                current_user.id,
+                arquivo.read(importacao.TAMANHO_MAXIMO + 1),
+                secure_filename(arquivo.filename) or 'extrato',
+                conta_id=request.form.get('conta_id') or None,
+                cartao_id=request.form.get('cartao_id') or None,
             )
-            db.session.add(conciliacao)
-            db.session.flush()  # Para obter o ID
-
-            # Processar matching
-            itens_processados = processar_matching(
-                resultado['transactions'],
-                conta_id,
-                current_user.id
-            )
-
-            # Criar itens de conciliação
-            for item in itens_processados:
-                melhor_match = item.get('melhor_match')
-                item_conciliacao = ItemConciliacao(
-                    conciliacao_id=conciliacao.id,
-                    data=item['data'],
-                    descricao=item['descricao'],
-                    valor=item['valor'],
-                    tipo=item['tipo'],
-                    numero_documento=item.get('numero_documento'),
-                    saldo_apos=item.get('saldo_apos'),
-                    status='pendente',
-                    transacao_id=melhor_match[0].id if melhor_match else None,
-                    categoria_sugerida_id=item['categoria_sugerida'].id if item['categoria_sugerida'] else None,
-                    score_matching=item['score_matching']
-                )
-                db.session.add(item_conciliacao)
-
-            # Atualizar status
-            conciliacao.status = 'pendente_revisao'
             db.session.commit()
-
-            flash(f'Arquivo processado com sucesso! {resultado["total"]} transações encontradas.', 'success')
-            return redirect(url_for('main.conciliacao_revisar', id=conciliacao.id))
-
+        except importacao.ErroImportacao as e:
+            db.session.rollback()
+            flash(str(e), 'danger')
+            return redirect(request.url)
         except Exception as e:
             db.session.rollback()
             flash(_erro_interno('Erro ao processar arquivo. Verifique se é um extrato válido.', e), 'danger')
             return redirect(request.url)
 
-    # GET: Mostrar formulário
-    contas = Conta.query.filter_by(user_id=current_user.id, ativa=True).all()
-    return render_template('conciliacao/nova.html', contas=contas)
+        for aviso in avisos:
+            flash(aviso, 'warning')
+        flash(f'Extrato lido: {conciliacao.total_linhas} lançamentos. Revise e confirme.', 'success')
+        return redirect(url_for('main.conciliacao_revisar', id=conciliacao.id))
+
+    return render_template('conciliacao/nova.html', contas=contas, cartoes=cartoes)
 
 
 @bp.route('/conciliacao/<int:id>/revisar')
 @login_required
 def conciliacao_revisar(id):
-    """Revisar itens da conciliação e confirmar matches"""
-    conciliacao = ConciliacaoBancaria.query.filter_by(
-        id=id,
-        user_id=current_user.id
-    ).first_or_404()
-
-    # Buscar itens
-    itens = ItemConciliacao.query.filter_by(
-        conciliacao_id=conciliacao.id
-    ).order_by(ItemConciliacao.data.desc()).all()
-
-    # Estatísticas
-    stats = {
-        'total': len(itens),
-        'com_match_forte': sum(1 for item in itens if item.score_matching and item.score_matching >= 90),
-        'com_match_medio': sum(1 for item in itens if item.score_matching and 70 <= item.score_matching < 90),
-        'sem_match': sum(1 for item in itens if not item.score_matching or item.score_matching < 70)
-    }
-
-    # Buscar todas as categorias para seleção
-    categorias = Categoria.query.filter_by(user_id=current_user.id).all()
-
+    """Revisar itens da conciliação e confirmar"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    itens = ItemConciliacao.query.filter_by(conciliacao_id=conciliacao.id) \
+        .order_by(ItemConciliacao.data.desc(), ItemConciliacao.id).all()
+    categorias = Categoria.query.filter_by(user_id=current_user.id).order_by(Categoria.nome).all()
     return render_template(
         'conciliacao/revisar.html',
         conciliacao=conciliacao,
         itens=itens,
-        stats=stats,
-        categorias=categorias
+        resumo=importacao.resumo(conciliacao),
+        categorias_receita=[c for c in categorias if c.tipo == 'receita'],
+        categorias_despesa=[c for c in categorias if c.tipo == 'despesa'],
     )
 
 
 @bp.route('/conciliacao/<int:id>/processar', methods=['POST'])
 @login_required
 def conciliacao_processar(id):
-    """Processar ações da conciliação (conciliar, importar, ignorar)"""
-    conciliacao = ConciliacaoBancaria.query.filter_by(
-        id=id,
-        user_id=current_user.id
-    ).first_or_404()
+    """Grava as decisões da revisão (idempotente: só processa uma vez)"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    if conciliacao.status == 'concluida':
+        flash('Esta conciliação já foi processada.', 'info')
+        return redirect(url_for('main.conciliacao_revisar', id=id))
 
+    decisoes = {}
+    for item in conciliacao.itens:
+        acao = request.form.get(f'acao_{item.id}')
+        if acao:
+            decisoes[item.id] = {
+                'acao': acao,
+                'transacao_id': request.form.get(f'transacao_{item.id}', type=int),
+                'categoria_id': request.form.get(f'categoria_{item.id}', type=int),
+            }
     try:
-        # Obter ações do formulário
-        acoes = request.form.getlist('acao')  # Lista de ações no formato "item_id:acao:transacao_id"
-
-        linhas_conciliadas = 0
-        linhas_importadas = 0
-
-        for acao_str in acoes:
-            partes = acao_str.split(':')
-            if len(partes) < 2:
-                continue
-
-            item_id = int(partes[0])
-            acao = partes[1]
-
-            item = ItemConciliacao.query.filter_by(
-                id=item_id,
-                conciliacao_id=conciliacao.id
-            ).first()
-
-            if not item:
-                continue
-
-            if acao == 'conciliar':
-                # Conciliar com transação existente
-                if len(partes) >= 3:
-                    transacao_alvo = get_owned(Transacao, partes[2])
-                    transacao_id = transacao_alvo.id if transacao_alvo else None
-                else:
-                    transacao_id = item.transacao_id
-
-                if transacao_id:
-                    item.transacao_id = transacao_id
-                    item.status = 'conciliado'
-                    linhas_conciliadas += 1
-
-            elif acao == 'importar':
-                # Importar como nova transação
-                categoria_escolhida = get_owned(Categoria, request.form.get(f'categoria_{item_id}'))
-                categoria_id = categoria_escolhida.id if categoria_escolhida else item.categoria_sugerida_id
-
-                nova_transacao = Transacao(
-                    descricao=item.descricao,
-                    valor=item.valor,
-                    tipo=item.tipo,
-                    data=item.data,
-                    conta_id=conciliacao.conta_id,
-                    categoria_id=categoria_id,
-                    pago=True,  # Transações do extrato já foram pagas
-                    forma_pagamento='dinheiro'
-                )
-                db.session.add(nova_transacao)
-                db.session.flush()
-
-                item.transacao_id = nova_transacao.id
-                item.status = 'importado'
-                linhas_importadas += 1
-
-            elif acao == 'ignorar':
-                # Ignorar item
-                item.status = 'ignorado'
-
-        # Atualizar estatísticas da conciliação
-        conciliacao.linhas_conciliadas = linhas_conciliadas
-        conciliacao.linhas_importadas = linhas_importadas
-        conciliacao.status = 'concluida'
-
-        db.session.commit()
-
-        flash(f'Conciliação concluída! {linhas_conciliadas} conciliadas, {linhas_importadas} importadas.', 'success')
-        return redirect(url_for('main.conciliacao_lista'))
-
+        r = importacao.aplicar_conciliacao(conciliacao, decisoes)
+    except importacao.ErroImportacao as e:
+        flash(str(e), 'warning')
+        return redirect(url_for('main.conciliacao_revisar', id=id))
     except Exception as e:
-        db.session.rollback()
         flash(_erro_interno('Erro ao processar conciliação.', e), 'danger')
         return redirect(url_for('main.conciliacao_revisar', id=id))
+
+    flash(f"Conciliação concluída: {r['por_status'].get('conciliado', 0)} conciliadas, "
+          f"{r['por_status'].get('importado', 0)} importadas, "
+          f"{r['por_status'].get('ignorado', 0)} ignoradas.", 'success')
+    if r['diferenca_saldo'] is not None and abs(r['diferenca_saldo']) >= Decimal('0.01'):
+        flash(f"Atenção: o saldo no sistema (R$ {r['saldo_sistema']:.2f}) difere do saldo do banco "
+              f"(R$ {r['saldo_banco']:.2f}) em R$ {r['diferenca_saldo']:.2f}.", 'warning')
+    return redirect(url_for('main.conciliacao_revisar', id=id))
 
 
 @bp.route('/conciliacao/<int:id>/excluir', methods=['POST'])
 @login_required
 def conciliacao_excluir(id):
-    """Excluir uma conciliação"""
-    conciliacao = ConciliacaoBancaria.query.filter_by(
-        id=id,
-        user_id=current_user.id
-    ).first_or_404()
-
+    """Excluir uma conciliação e desfazer o que ela importou"""
+    conciliacao = ConciliacaoBancaria.query.filter_by(id=id, user_id=current_user.id).first_or_404()
     try:
-        db.session.delete(conciliacao)
-        db.session.commit()
-        flash('Conciliação excluída com sucesso', 'success')
+        removidas = importacao.desfazer_conciliacao(conciliacao)
+        msg = 'Conciliação excluída'
+        if removidas:
+            msg += f' e {removidas} transação(ões) importada(s) removida(s), com saldo restaurado'
+        flash(msg + '.', 'success')
     except Exception as e:
-        db.session.rollback()
         flash(_erro_interno('Erro ao excluir conciliação.', e), 'danger')
-
     return redirect(url_for('main.conciliacao_lista'))
 
 

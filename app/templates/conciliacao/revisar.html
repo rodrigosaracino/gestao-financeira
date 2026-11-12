@@ -1,238 +1,183 @@
 {% extends "base.html" %}
 
-{% block title %}Revisar Conciliação{% endblock %}
+{% block title %}Revisar Importação{% endblock %}
 
 {% block content %}
+{% set editavel = conciliacao.status != 'concluida' %}
 <div class="container-fluid mt-4">
     <div class="d-flex align-items-center mb-4">
         <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-sm btn-outline-secondary me-3">
             <i class="bi bi-arrow-left"></i>
         </a>
-        <h2 class="mb-0">
-            <i class="bi bi-check2-square"></i> Revisar Conciliação
-        </h2>
+        <h2 class="mb-0"><i class="bi bi-check2-square"></i> {{ 'Revisar importação' if editavel else 'Importação concluída' }}</h2>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-12 col-md-12">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Informações da Conciliação</h5>
-                    <div class="row">
-                        <div class="col-12 col-md-3">
-                            <strong>Arquivo:</strong> {{ conciliacao.arquivo_nome }}
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <strong>Conta:</strong> {{ conciliacao.conta.nome }}
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <strong>Período:</strong>
-                            {% if conciliacao.data_inicio and conciliacao.data_fim %}
-                                {{ conciliacao.data_inicio.strftime('%d/%m/%Y') }} a {{ conciliacao.data_fim.strftime('%d/%m/%Y') }}
-                            {% endif %}
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <strong>Total de itens:</strong> {{ stats.total }}
-                        </div>
-                    </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 col-md-3"><strong>Arquivo:</strong> {{ conciliacao.arquivo_nome }} <span class="badge bg-secondary">{{ conciliacao.formato }}</span></div>
+                <div class="col-12 col-md-3"><strong>Destino:</strong> {{ resumo.destino }}</div>
+                <div class="col-12 col-md-3"><strong>Período:</strong>
+                    {% if conciliacao.data_inicio %}{{ conciliacao.data_inicio.strftime('%d/%m/%Y') }} a {{ conciliacao.data_fim.strftime('%d/%m/%Y') }}{% endif %}
+                </div>
+                <div class="col-12 col-md-3"><strong>Lançamentos:</strong> {{ resumo.total }}</div>
+            </div>
+            {% if resumo.saldo_banco is not none %}
+            <hr>
+            <div class="row g-3">
+                <div class="col-12 col-md-4"><strong>Saldo no banco:</strong> R$ {{ "%.2f"|format(resumo.saldo_banco) }}</div>
+                <div class="col-12 col-md-4"><strong>Saldo no sistema:</strong> R$ {{ "%.2f"|format(resumo.saldo_sistema) }}</div>
+                <div class="col-12 col-md-4">
+                    {% if not editavel %}
+                        {% if resumo.diferenca_saldo is not none and resumo.diferenca_saldo|abs >= 0.01 %}
+                        <span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Diferença: R$ {{ "%.2f"|format(resumo.diferenca_saldo) }}</span>
+                        {% else %}
+                        <span class="text-success"><i class="bi bi-check-circle"></i> Saldos batem</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">A comparação é feita após confirmar.</span>
+                    {% endif %}
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div class="row mb-4 g-3">
-        <div class="col-12 col-md-4">
-            <div class="card text-white bg-success">
-                <div class="card-body text-center">
-                    <h6 class="card-title mb-2">Match Forte (&gt;90%)</h6>
-                    <h3 class="mb-0">{{ stats.com_match_forte }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="card text-white bg-warning">
-                <div class="card-body text-center">
-                    <h6 class="card-title mb-2">Match Médio (70-90%)</h6>
-                    <h3 class="mb-0">{{ stats.com_match_medio }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="card text-white bg-info">
-                <div class="card-body text-center">
-                    <h6 class="card-title mb-2">Sem Match (&lt;70%)</h6>
-                    <h3 class="mb-0">{{ stats.sem_match }}</h3>
-                </div>
-            </div>
+            {% endif %}
         </div>
     </div>
 
-    {% if conciliacao.status != 'concluida' %}
+    <div class="row g-3 mb-4">
+        {% set ps = resumo.por_status %}
+        {% if editavel %}
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Novos</div><h3 class="mb-0">{{ resumo.sugestoes.get('importar', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Já cadastrados (conciliar)</div><h3 class="mb-0">{{ resumo.sugestoes.get('conciliar', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Já importados antes</div><h3 class="mb-0">{{ ps.get('duplicado', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Ignorar (sugestão)</div><h3 class="mb-0">{{ resumo.sugestoes.get('ignorar', 0) }}</h3></div></div></div>
+        {% else %}
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Importados</div><h3 class="mb-0">{{ ps.get('importado', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Conciliados</div><h3 class="mb-0">{{ ps.get('conciliado', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Já importados antes</div><h3 class="mb-0">{{ ps.get('duplicado', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Ignorados</div><h3 class="mb-0">{{ ps.get('ignorado', 0) }}</h3></div></div></div>
+        {% endif %}
+    </div>
+
+    {% if editavel %}
     <form method="POST" action="{{ url_for('main.conciliacao_processar', id=conciliacao.id) }}" id="formConciliacao">
-<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-massa="sugestao">Usar sugestões</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-massa="importar">Importar todos os novos</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-massa="ignorar">Ignorar todos</button>
+        </div>
     {% endif %}
 
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title mb-4">Itens do Extrato</h5>
-
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Descrição</th>
+                        <th class="text-end">Valor</th>
+                        <th>Situação</th>
+                        <th style="min-width: 170px;">Ação</th>
+                        <th style="min-width: 200px;">Categoria</th>
+                    </tr>
+                </thead>
+                <tbody>
                 {% for item in itens %}
-                <div class="card mb-3 border-{{ 'success' if item.score_matching and item.score_matching >= 90 else 'warning' if item.score_matching and item.score_matching >= 70 else 'secondary' }}">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col-12 col-md-6">
-                                <strong>{{ item.descricao }}</strong>
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <span class="badge bg-{{ 'success' if item.tipo == 'receita' else 'danger' }}">
-                                    {{ 'Receita' if item.tipo == 'receita' else 'Despesa' }}
-                                </span>
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <strong>R$ {{ "%.2f"|format(item.valor) }}</strong>
-                            </div>
-                            <div class="col-12 col-md-2">
-                                {{ item.data.strftime('%d/%m/%Y') }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        {% if item.transacao and item.score_matching and item.score_matching >= 70 %}
-                            <div class="alert alert-{{ 'success' if item.score_matching >= 90 else 'warning' }} mb-3">
-                                <i class="bi bi-check-circle"></i>
-                                <strong>Match encontrado ({{ item.score_matching }}% de similaridade):</strong>
-                                <br>
-                                Transação existente: "{{ item.transacao.descricao }}" - R$ {{ "%.2f"|format(item.transacao.valor) }} em {{ item.transacao.data.strftime('%d/%m/%Y') }}
-                            </div>
-                        {% endif %}
-
-                        {% if conciliacao.status != 'concluida' %}
-                        <div class="row">
-                            <div class="col-12">
-                                <label class="form-label"><strong>Ação:</strong></label>
-                                <div class="d-flex flex-column flex-md-row gap-2" role="group">
-                                    {% if item.transacao and item.score_matching and item.score_matching >= 70 %}
-                                    <input type="radio" class="btn-check" name="acao_{{ item.id }}" id="conciliar_{{ item.id }}" value="{{ item.id }}:conciliar:{{ item.transacao.id }}" checked>
-                                    <label class="btn btn-outline-success flex-grow-1" for="conciliar_{{ item.id }}">
-                                        <i class="bi bi-check2-all"></i> <span class="d-none d-sm-inline">Conciliar com existente</span><span class="d-sm-none">Conciliar</span>
-                                    </label>
-                                    {% endif %}
-
-                                    <input type="radio" class="btn-check" name="acao_{{ item.id }}" id="importar_{{ item.id }}" value="{{ item.id }}:importar" {% if not (item.transacao and item.score_matching and item.score_matching >= 70) %}checked{% endif %}>
-                                    <label class="btn btn-outline-primary flex-grow-1" for="importar_{{ item.id }}">
-                                        <i class="bi bi-plus-circle"></i> <span class="d-none d-sm-inline">Importar como nova</span><span class="d-sm-none">Importar</span>
-                                    </label>
-
-                                    <input type="radio" class="btn-check" name="acao_{{ item.id }}" id="ignorar_{{ item.id }}" value="{{ item.id }}:ignorar">
-                                    <label class="btn btn-outline-secondary flex-grow-1" for="ignorar_{{ item.id }}">
-                                        <i class="bi bi-x-circle"></i> Ignorar
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row mt-3" id="categoria_{{ item.id }}" style="display: none;">
-                            <div class="col-12 col-md-12">
-                                <label class="form-label">Categoria:</label>
-                                <select name="categoria_{{ item.id }}" class="form-select">
-                                    {% if item.categoria_sugerida %}
-                                    <option value="{{ item.categoria_sugerida.id }}" selected>
-                                        {{ item.categoria_sugerida.nome }} (Sugerida)
-                                    </option>
-                                    {% endif %}
-                                    <option value="">-- Selecione --</option>
-                                    {% for cat in categorias %}
-                                        {% if cat.tipo == item.tipo %}
-                                        <option value="{{ cat.id }}" {% if item.categoria_sugerida and cat.id == item.categoria_sugerida.id %}selected{% endif %}>
-                                            {{ cat.nome }}
-                                        </option>
-                                        {% endif %}
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        {% else %}
-                        <div class="alert alert-info mb-0">
-                            <strong>Status:</strong>
-                            {% if item.status == 'conciliado' %}
-                                <span class="badge bg-success">Conciliado</span> com transação existente
+                    <tr data-item="{{ item.id }}" data-sugestao="{{ item.acao_sugerida or 'importar' }}" data-status="{{ item.status }}">
+                        <td class="text-nowrap">{{ item.data.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            {{ item.descricao }}
+                            {% if item.total_parcelas %}<span class="badge bg-info">parcela {{ item.numero_parcela }}/{{ item.total_parcelas }}</span>{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap {{ 'text-success' if item.tipo == 'receita' else 'text-danger' }}">
+                            {{ '+' if item.tipo == 'receita' else '-' }} R$ {{ "%.2f"|format(item.valor) }}
+                        </td>
+                        <td class="small">
+                            {% if item.status == 'duplicado' %}
+                                <span class="badge bg-secondary">Já importado</span>
                             {% elif item.status == 'importado' %}
-                                <span class="badge bg-primary">Importado</span> como nova transação
+                                <span class="badge bg-primary">Importado</span>
+                            {% elif item.status == 'conciliado' %}
+                                <span class="badge bg-success">Conciliado</span>
                             {% elif item.status == 'ignorado' %}
-                                <span class="badge bg-secondary">Ignorado</span>
+                                <span class="badge bg-light text-dark">Ignorado</span>
+                            {% elif item.transacao and item.acao_sugerida == 'conciliar' %}
+                                <span class="badge bg-success">{{ item.score_matching }}% igual a</span>
+                                "{{ item.transacao.descricao }}" ({{ item.transacao.data.strftime('%d/%m') }})
+                            {% elif item.transacao %}
+                                <span class="badge bg-warning text-dark">Parecido ({{ item.score_matching }}%)</span>
+                                "{{ item.transacao.descricao }}" ({{ item.transacao.data.strftime('%d/%m') }})
                             {% else %}
-                                <span class="badge bg-warning">{{ item.status }}</span>
+                                <span class="badge bg-info">Novo</span>
                             {% endif %}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const importarRadio{{ item.id }} = document.getElementById('importar_{{ item.id }}');
-                    const categoriaDiv{{ item.id }} = document.getElementById('categoria_{{ item.id }}');
-                    const radios{{ item.id }} = document.getElementsByName('acao_{{ item.id }}');
-
-                    function updateCategoriaVisibility{{ item.id }}() {
-                        if (importarRadio{{ item.id }}.checked) {
-                            categoriaDiv{{ item.id }}.style.display = 'block';
-                        } else {
-                            categoriaDiv{{ item.id }}.style.display = 'none';
-                        }
-                    }
-
-                    radios{{ item.id }}.forEach(radio => {
-                        radio.addEventListener('change', updateCategoriaVisibility{{ item.id }});
-                    });
-
-                    updateCategoriaVisibility{{ item.id }}();
-                });
-                </script>
+                        </td>
+                        <td>
+                            {% if editavel %}
+                            <select name="acao_{{ item.id }}" class="form-select form-select-sm acao">
+                                {% if item.transacao %}
+                                <option value="conciliar" {% if item.acao_sugerida == 'conciliar' %}selected{% endif %}>Conciliar com existente</option>
+                                {% endif %}
+                                <option value="importar" {% if item.acao_sugerida == 'importar' and item.status != 'duplicado' %}selected{% endif %}>Importar como nova</option>
+                                <option value="ignorar" {% if item.acao_sugerida == 'ignorar' or item.status == 'duplicado' %}selected{% endif %}>Ignorar</option>
+                            </select>
+                            {% else %}
+                                {{ item.transacao.descricao if item.transacao and item.status == 'conciliado' else '' }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if editavel %}
+                            <select name="categoria_{{ item.id }}" class="form-select form-select-sm">
+                                <option value="">Automática{% if item.categoria_sugerida %}: {{ item.categoria_sugerida.nome }}{% endif %}</option>
+                                {% for c in (categorias_receita if item.tipo == 'receita' else categorias_despesa) %}
+                                <option value="{{ c.id }}">{{ c.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            {% elif item.transacao and item.transacao.categoria %}
+                                {{ item.transacao.categoria.nome }}
+                            {% endif %}
+                        </td>
+                    </tr>
                 {% endfor %}
-
-                {% if not itens %}
-                <div class="alert alert-info">
-                    Nenhum item encontrado nesta conciliação.
-                </div>
-                {% endif %}
-            </div>
+                </tbody>
+            </table>
         </div>
+    </div>
 
-        {% if conciliacao.status != 'concluida' and itens %}
-        <div class="card mt-4">
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-primary btn-lg" onclick="return prepareSubmit()">
-                        <i class="bi bi-check-circle"></i> Confirmar e Processar Conciliação
-                    </button>
-                    <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-outline-secondary">
-                        Cancelar
-                    </a>
-                </div>
-            </div>
+    {% if editavel %}
+        <div class="d-grid d-md-flex justify-content-md-end gap-2 mt-3 mb-5">
+            <a href="{{ url_for('main.conciliacao_lista') }}" class="btn btn-outline-secondary">Revisar depois</a>
+            <button type="submit" class="btn btn-primary btn-lg" id="btnConfirmar">
+                <i class="bi bi-check2-all"></i> Confirmar importação
+            </button>
         </div>
-        {% endif %}
-
-    {% if conciliacao.status != 'concluida' %}
     </form>
-
-    <script>
-    function prepareSubmit() {
-        const form = document.getElementById('formConciliacao');
-        const radios = document.querySelectorAll('input[type="radio"]:checked');
-
-        radios.forEach(radio => {
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'acao';
-            hiddenInput.value = radio.value;
-            form.appendChild(hiddenInput);
-        });
-
-        return confirm('Tem certeza que deseja processar esta conciliação? Esta ação não pode ser desfeita.');
-    }
-    </script>
     {% endif %}
 </div>
+
+{% if editavel %}
+<script>
+(function () {
+    var form = document.getElementById('formConciliacao');
+    document.querySelectorAll('[data-massa]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var modo = btn.getAttribute('data-massa');
+            document.querySelectorAll('tr[data-item]').forEach(function (tr) {
+                var sel = tr.querySelector('select.acao');
+                if (!sel) return;
+                var status = tr.getAttribute('data-status');
+                var alvo = modo === 'sugestao' ? (status === 'duplicado' ? 'ignorar' : tr.getAttribute('data-sugestao'))
+                         : modo === 'importar' ? (status === 'duplicado' || sel.value === 'conciliar' ? sel.value : 'importar')
+                         : 'ignorar';
+                if (sel.querySelector('option[value="' + alvo + '"]')) sel.value = alvo;
+            });
+        });
+    });
+    form.addEventListener('submit', function () {
+        var btn = document.getElementById('btnConfirmar');
+        btn.disabled = true;
+        btn.textContent = 'Gravando...';
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
