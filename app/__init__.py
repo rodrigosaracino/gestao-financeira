@@ -82,7 +82,11 @@ def create_app(config_class=Config):
     @login_manager.user_loader
     def load_user(user_id):
         from app.models import User
-        return db.session.get(User, int(user_id))
+        user = db.session.get(User, int(user_id))
+        # Sessão/cookie "lembrar-me" de usuário desativado deixa de valer na hora
+        if user is None or not user.ativo:
+            return None
+        return user
 
     # Middleware de segurança
     @app.before_request
