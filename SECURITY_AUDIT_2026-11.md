@@ -15,7 +15,7 @@ Testes automatizados: `tests/` (41 testes, `pytest`).
 ## Altos (corrigidos)
 - **A1** Vazamento de dados de outro usuário via ids de formulário (conciliação, metas, orçamentos) — coberto pelo C1.
 - **A2** Talisman (HTTPS/HSTS/CSP) nunca era ativado (`FLASK_ENV` não estava na config). Agora ativo em produção; CSP sem `img-src https:`, com `object-src 'none'`, `base-uri`, `form-action`, `frame-ancestors`.
-- **A3** Bloqueio de força bruta e rate-limit baseados em `X-Forwarded-For` (forjável; permitia escapar do bloqueio ou bloquear outra pessoa). Agora `ProxyFix` confia só no Traefik e o IP vem de `request.remote_addr`.
+- **A3** Bloqueio de força bruta e rate-limit baseados em `X-Forwarded-For` (forjável; permitia escapar do bloqueio ou bloquear outra pessoa). Agora `ProxyFix` confia só no Traefik e o IP vem de `request.remote_addr`. Como o site fica atrás do Cloudflare, o IP real vem de `CF-Connecting-IP`, aceito **somente** quando a conexão chega de uma faixa oficial do Cloudflare (inclusive no rate limit).
 
 ## Médios (corrigidos)
 - Open redirect no `?next=` (`/\evil.com`) → `is_safe_redirect()`.

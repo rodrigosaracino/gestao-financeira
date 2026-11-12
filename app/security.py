@@ -1,6 +1,7 @@
 """
 Módulo de segurança centralizado
 """
+import ipaddress
 import re
 import logging
 from datetime import datetime, timedelta
@@ -121,17 +122,44 @@ def check_file_extension(filename, allowed_extensions=None):
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
 
+# Faixas oficiais do Cloudflare (https://www.cloudflare.com/ips/, conferidas em 11/2026)
+CLOUDFLARE_IPS = [
+    '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+    '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+    '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+    '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+    '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+    '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+]
+_CLOUDFLARE_REDES = [ipaddress.ip_network(r) for r in CLOUDFLARE_IPS]
+
+
+def _eh_cloudflare(ip):
+    try:
+        endereco = ipaddress.ip_address(ip)
+    except (ValueError, TypeError):
+        return False
+    return any(endereco in rede for rede in _CLOUDFLARE_REDES)
+
+
 def get_client_ip():
     """
-    Obtém o IP real do cliente, considerando proxies
+    Obtém o IP real do cliente.
 
-    Returns:
-        IP do cliente
+    1. O ProxyFix (app/__init__.py) resolve o IP de quem conectou no Traefik.
+    2. Se esse IP for do Cloudflare, o visitante real está em CF-Connecting-IP.
+       O header só é aceito quando a conexão veio MESMO do Cloudflare; quem
+       acessar o servidor direto não consegue forjá-lo.
+    Nunca ler X-Forwarded-For diretamente: o cliente controla esse header.
     """
-    # O ProxyFix (app/__init__.py) já resolve o IP real a partir do proxy
-    # confiável. Nunca ler X-Forwarded-For diretamente: o cliente controla
-    # esse header e poderia escapar do bloqueio ou bloquear outro IP.
-    return request.remote_addr or 'desconhecido'
+    ip = request.remote_addr or 'desconhecido'
+    if current_app.config.get('TRUST_CLOUDFLARE', True) and _eh_cloudflare(ip):
+        cf_ip = (request.headers.get('CF-Connecting-IP') or '').strip()
+        try:
+            return str(ipaddress.ip_address(cf_ip))
+        except ValueError:
+            pass
+    return ip
 
 
 def is_ip_blocked(ip):

@@ -227,3 +227,33 @@ def test_templates_post_tem_csrf():
                 if 'csrf_token' not in s[m.end():fim]:
                     faltando.append(os.path.relpath(f, base))
     assert not faltando, faltando
+
+
+# ---------- IP real atrás do Cloudflare ----------
+
+def test_ip_real_vem_do_cloudflare(app):
+    from app.security import get_client_ip
+    with app.test_request_context('/', headers={'CF-Connecting-IP': '200.150.10.20'},
+                                  environ_base={'REMOTE_ADDR': '172.70.1.1'}):  # IP do Cloudflare
+        assert get_client_ip() == '200.150.10.20'
+
+
+def test_cf_connecting_ip_forjado_fora_do_cloudflare_e_ignorado(app):
+    from app.security import get_client_ip
+    with app.test_request_context('/', headers={'CF-Connecting-IP': '1.2.3.4'},
+                                  environ_base={'REMOTE_ADDR': '45.10.10.10'}):  # acesso direto
+        assert get_client_ip() == '45.10.10.10'
+
+
+def test_cf_connecting_ip_invalido_e_ignorado(app):
+    from app.security import get_client_ip
+    with app.test_request_context('/', headers={'CF-Connecting-IP': 'lixo<script>'},
+                                  environ_base={'REMOTE_ADDR': '2606:4700::1'}):
+        assert get_client_ip() == '2606:4700::1'
+
+
+def test_rate_limit_usa_ip_real(app):
+    from app import _chave_rate_limit
+    with app.test_request_context('/', headers={'CF-Connecting-IP': '200.150.10.20'},
+                                  environ_base={'REMOTE_ADDR': '104.16.0.5'}):
+        assert _chave_rate_limit() == '200.150.10.20'

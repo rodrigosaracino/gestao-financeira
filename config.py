@@ -39,6 +39,8 @@ class Config:
 
     # Número de proxies reversos confiáveis à frente do app (Traefik = 1)
     TRUSTED_PROXIES = int(os.environ.get('TRUSTED_PROXIES', '1'))
+    # Site atrás do Cloudflare: usar CF-Connecting-IP quando a conexão vier dele
+    TRUST_CLOUDFLARE = os.environ.get('TRUST_CLOUDFLARE', '1') == '1'
 
     # Rate Limiting
     RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL', 'memory://')
