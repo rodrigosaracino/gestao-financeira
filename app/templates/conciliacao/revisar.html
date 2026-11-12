@@ -69,6 +69,7 @@
 
     {% if conciliacao.status != 'concluida' %}
     <form method="POST" action="{{ url_for('main.conciliacao_processar', id=conciliacao.id) }}" id="formConciliacao">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% endif %}
 
         <div class="card">

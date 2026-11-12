@@ -3,7 +3,7 @@ Módulo para matching inteligente de transações
 """
 from datetime import timedelta
 from decimal import Decimal
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from app.models import Transacao, Categoria
 
 

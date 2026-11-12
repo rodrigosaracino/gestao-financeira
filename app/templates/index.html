@@ -771,7 +771,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } catch (error) {
             console.error('Erro ao criar gráfico:', error);
-            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro ao criar gráfico: ' + error.message + '</div>';
+            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro ao criar gráfico: ' + escapeHtml(error.message) + '</div>';
         }
     }
 });

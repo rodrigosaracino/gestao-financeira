@@ -128,12 +128,10 @@ def get_client_ip():
     Returns:
         IP do cliente
     """
-    if request.headers.get('X-Forwarded-For'):
-        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    elif request.headers.get('X-Real-IP'):
-        return request.headers.get('X-Real-IP')
-    else:
-        return request.remote_addr
+    # O ProxyFix (app/__init__.py) já resolve o IP real a partir do proxy
+    # confiável. Nunca ler X-Forwarded-For diretamente: o cliente controla
+    # esse header e poderia escapar do bloqueio ou bloquear outro IP.
+    return request.remote_addr or 'desconhecido'
 
 
 def is_ip_blocked(ip):
@@ -210,6 +208,65 @@ def record_login_attempt(ip, success=False):
         security_logger.error(f"IP bloqueado por excesso de tentativas: {ip}")
 
     return failed_attempts
+
+
+def mask_email(email):
+    """Mascara um e-mail para logs (ex.: ro***@gmail.com) e remove quebras de linha."""
+    if not email:
+        return ''
+    email = str(email).replace('\r', '').replace('\n', '')[:254]
+    if '@' not in email:
+        return email[:2] + '***'
+    local, domain = email.split('@', 1)
+    return f"{local[:2]}***@{domain}"
+
+
+def is_safe_redirect(target):
+    """Aceita apenas caminhos relativos do próprio site (previne open redirect)."""
+    from urllib.parse import urlparse
+    if not target or '\\' in target or any(c in target for c in '\r\n\t'):
+        return False
+    parsed = urlparse(target)
+    return (not parsed.scheme and not parsed.netloc
+            and target.startswith('/') and not target.startswith('//'))
+
+
+def _owned_query(model_class, user_id):
+    """Query base restrita aos registros do usuário, para qualquer modelo."""
+    from app.models import Conta, Transacao
+    if hasattr(model_class, 'user_id'):
+        return model_class.query.filter(model_class.user_id == user_id)
+    if model_class is Transacao:
+        return Transacao.query.join(Conta, Transacao.conta_id == Conta.id).filter(Conta.user_id == user_id)
+    raise ValueError(f"Modelo sem dono definido: {model_class.__name__}")
+
+
+def get_owned(model_class, resource_id, user_id=None):
+    """
+    Retorna o registro se pertencer ao usuário logado; senão None.
+    Use para ids que chegam por formulário/JSON (conta_id, categoria_id...).
+    """
+    if resource_id in (None, '', 'None'):
+        return None
+    try:
+        resource_id = int(resource_id)
+    except (TypeError, ValueError):
+        return None
+    uid = user_id if user_id is not None else current_user.id
+    return _owned_query(model_class, uid).filter(model_class.id == resource_id).first()
+
+
+def get_owned_or_404(model_class, resource_id, user_id=None):
+    """Como get_owned, mas responde 404 (sem revelar se o id existe)."""
+    resource = get_owned(model_class, resource_id, user_id)
+    if resource is None:
+        if resource_id not in (None, ''):
+            security_logger.warning(
+                f"Acesso negado: user {current_user.id if current_user.is_authenticated else '-'} "
+                f"-> {model_class.__name__} {str(resource_id)[:20]}"
+            )
+        abort(404)
+    return resource
 
 
 def require_ownership(model_class, id_param='id', user_field='user_id'):

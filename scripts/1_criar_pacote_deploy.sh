@@ -9,7 +9,7 @@ echo "📦 CRIANDO PACOTE DE DEPLOY"
 echo "=========================================="
 
 # Verificar se estamos no diretório correto
-if [ ! -f "app.py" ]; then
+if [ ! -f "run.py" ]; then
     echo "❌ ERRO: Execute este script do diretório raiz do projeto"
     exit 1
 fi

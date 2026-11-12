@@ -1,37 +1,31 @@
-# Use Python 3.11 slim image
+# ---- Etapa de build: compila dependências (gcc fica só aqui) ----
+FROM python:3.11-slim AS build
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ---- Imagem final ----
 FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV FLASK_APP=run.py
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=run.py
 
-# Set work directory
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 app
+
+COPY --from=build /install /usr/local
+
 WORKDIR /app
+COPY --chown=app:app . .
+RUN mkdir -p migrations logs && chown -R app:app /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql-client \
-    gcc \
-    python3-dev \
-    musl-dev \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Não rodar como root
+USER app
 
-# Copy requirements file
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy project files
-COPY . .
-
-# Create migrations directory if it doesn't exist
-RUN mkdir -p migrations
-
-# Expose port
 EXPOSE 5000
-
-# Run the application with gunicorn
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "run:app"]

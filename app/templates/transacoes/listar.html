@@ -304,6 +304,7 @@
 
 <!-- Hidden Delete Form -->
 <form id="formDeletar" method="POST" style="display: none;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
 <!-- Edit Modal -->
@@ -534,7 +535,7 @@ function showToast(message, type = 'info') {
     toast.style.zIndex = '9999';
     toast.style.minWidth = '300px';
     toast.innerHTML = `
-        ${message}
+        ${escapeHtml(message)}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
 

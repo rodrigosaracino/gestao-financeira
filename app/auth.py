@@ -6,8 +6,13 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app.models import db, User, Categoria
 from app.security import (
     sanitize_input, validate_email, get_client_ip,
-    record_login_attempt, is_ip_blocked, log_suspicious_activity
+    record_login_attempt, is_ip_blocked, log_suspicious_activity,
+    mask_email, is_safe_redirect
 )
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Hash fictício para igualar o tempo de resposta quando o e-mail não existe
+_DUMMY_HASH = generate_password_hash('senha-ficticia-para-timing')
 from app import limiter
 
 # Categorias padrão criadas automaticamente para novos usuários
@@ -99,7 +104,7 @@ def login():
 
         # Validar formato de email
         if not validate_email(email):
-            log_suspicious_activity(f"Tentativa de login com email inválido: {email}", level='warning')
+            log_suspicious_activity(f"Tentativa de login com email inválido: {mask_email(email)}", level='warning')
             flash('Email ou senha incorretos.', 'error')
             record_login_attempt(client_ip, success=False)
             return redirect(url_for('auth.login'))
@@ -108,30 +113,30 @@ def login():
         user = User.query.filter_by(email=email).first()
 
         # Verificar se usuário existe e senha está correta
+        if not user:
+            check_password_hash(_DUMMY_HASH, senha)  # mesmo custo de tempo
         if not user or not user.check_password(senha):
             flash('Email ou senha incorretos.', 'error')
             record_login_attempt(client_ip, success=False)
-            log_suspicious_activity(f"Tentativa de login falhada para: {email}", level='warning')
+            log_suspicious_activity(f"Tentativa de login falhada para: {mask_email(email)}", level='warning')
             return redirect(url_for('auth.login'))
 
         # Verificar se usuário está ativo
         if not user.ativo:
             flash('Sua conta está desativada. Entre em contato com o administrador.', 'error')
-            log_suspicious_activity(f"Tentativa de login em conta desativada: {email}", level='warning')
+            log_suspicious_activity(f"Tentativa de login em conta desativada: {mask_email(email)}", level='warning')
             return redirect(url_for('auth.login'))
 
         # Login bem-sucedido
         login_user(user, remember=lembrar)
         record_login_attempt(client_ip, success=True)
-        log_suspicious_activity(f"Login bem-sucedido: {email}", level='info')
+        log_suspicious_activity(f"Login bem-sucedido: {mask_email(email)}", level='info')
         flash(f'Bem-vindo, {user.nome}!', 'success')
 
         # Redirecionar para a página solicitada ou dashboard
         next_page = request.args.get('next')
-        if next_page:
-            # Validar que next_page é uma URL local (prevenir open redirect)
-            if next_page.startswith('/') and not next_page.startswith('//'):
-                return redirect(next_page)
+        if is_safe_redirect(next_page):  # previne open redirect
+            return redirect(next_page)
         return redirect(url_for('main.index'))
 
     return render_template('auth/login.html')
@@ -188,7 +193,7 @@ def registro():
         user_existente = User.query.filter_by(email=email).first()
         if user_existente:
             flash('Este email já está cadastrado.', 'error')
-            log_suspicious_activity(f"Tentativa de registro com email existente: {email}", level='warning')
+            log_suspicious_activity(f"Tentativa de registro com email existente: {mask_email(email)}", level='warning')
             return redirect(url_for('auth.registro'))
 
         # Criar novo usuário
@@ -206,14 +211,14 @@ def registro():
 
         db.session.commit()
 
-        log_suspicious_activity(f"Novo usuário registrado: {email}", level='info')
+        log_suspicious_activity(f"Novo usuário registrado: {mask_email(email)}", level='info')
         flash('Conta criada com sucesso! Faça login para continuar.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/registro.html')
 
 
-@auth.route('/logout')
+@auth.route('/logout', methods=['POST'])
 @login_required
 def logout():
     """Fazer logout"""
