@@ -106,6 +106,15 @@ def eh_pagamento_fatura(descricao):
     return bool(_PAGAMENTO_FATURA.search(_sem_acentos(descricao or '')))
 
 
+# Fatura de cartão: saldo da fatura anterior repetido como débito (não é compra nova)
+_SALDO_ANTERIOR = re.compile(r'^\s*(SALDO EM ATRASO|SALDO ANTERIOR|SALDO DA FATURA ANTERIOR|'
+                             r'SALDO RESTANTE DA FATURA ANTERIOR|FATURA ANTERIOR)\b', re.I)
+
+
+def eh_saldo_anterior(descricao):
+    return bool(_SALDO_ANTERIOR.search(_sem_acentos(descricao or '')))
+
+
 def _resultado(formato, tipo_extrato, transacoes, account_info=None, saldo=None, data_saldo=None, avisos=None):
     datas = [t['data'] for t in transacoes]
     return {
@@ -131,6 +140,7 @@ def _transacao(data_, descricao, valor_com_sinal, tipo_extrato, numero_documento
         'numero_documento': (numero_documento or None) and str(numero_documento)[:100],
         'saldo_apos': saldo_apos,
         'eh_pagamento_fatura': tipo_extrato == 'cartao' and valor_com_sinal > 0 and eh_pagamento_fatura(descricao),
+        'eh_saldo_anterior': tipo_extrato == 'cartao' and valor_com_sinal < 0 and eh_saldo_anterior(descricao),
     }
 
 
@@ -191,6 +201,21 @@ def parse_ofx(file_content, max_linhas=MAX_LINHAS_PADRAO):
             data_saldo = _ofx_data(_ofx_tag(ledger.group(1), 'DTASOF'))
         except (InvalidOperation, ValueError, TypeError):
             pass
+
+    # Nubank: o rendimento da conta vem em <BALLIST> ("RENDIMENTO LIQUIDO NO PERIODO"),
+    # não como lançamento, mas entra no saldo. Vira uma receita no fim do período.
+    for bal in re.findall(r'<BAL>(.*?)(?=</BAL>|<BAL>|</BALLIST>)', texto, re.I | re.S):
+        nome = _sem_acentos((_ofx_tag(bal, 'NAME') or '') + ' ' + (_ofx_tag(bal, 'DESC') or '')).upper()
+        if 'RENDIMENTO' not in nome:
+            continue
+        try:
+            valor = parse_valor_br(_ofx_tag(bal, 'VALUE'))
+            data_ = _ofx_data(_ofx_tag(bal, 'DTASOF')) if _ofx_tag(bal, 'DTASOF') else data_saldo
+        except (InvalidOperation, ValueError, TypeError):
+            continue
+        if valor and data_:
+            transacoes.append(_transacao(data_, 'Rendimento líquido da conta', valor, tipo_extrato,
+                                         numero_documento=f'RENDIMENTO-{data_.isoformat()}'))
 
     if len(re.findall(r'<ACCTID>', texto, re.I)) > 1:
         avisos.append('O arquivo tem mais de uma conta; todos os lançamentos foram lidos juntos.')
@@ -330,12 +355,19 @@ def parse_csv(file_content, config=None, max_linhas=MAX_LINHAS_PADRAO):
         raise ExtratoInvalido('CSV sem coluna "data".')
     cab = linhas[inicio]
     i_data = _achar_coluna(cab, 'data')
-    i_desc = _achar_coluna(cab, 'descri', 'historico', 'lancamento', 'estabelecimento', 'titulo', 'memo')
+    i_desc = _achar_coluna(cab, 'descri', 'estabelecimento', 'titulo', 'memo', 'favorecido')
+    i_hist = _achar_coluna(cab, 'historico')
+    if i_desc is None:
+        i_desc, i_hist = i_hist, None
+    i_saldo = _achar_coluna(cab, 'saldo')
     i_valor = _achar_coluna(cab, 'valor', 'amount', 'quantia')
     i_cred = _achar_coluna(cab, 'credito', 'entrada')
     i_deb = _achar_coluna(cab, 'debito', 'saida')
     if i_valor is None and i_cred is None and i_deb is None:
         raise ExtratoInvalido('CSV sem coluna de valor.')
+
+    def _celula(linha, i):
+        return linha[i].strip() if i is not None and i < len(linha) else ''
 
     transacoes = []
     for linha in linhas[inicio + 1:]:
@@ -353,11 +385,26 @@ def parse_csv(file_content, config=None, max_linhas=MAX_LINHAS_PADRAO):
             continue
         if valor == 0:
             continue
-        descricao = linha[i_desc] if i_desc is not None and i_desc < len(linha) else ''
-        if 'SALDO' in _sem_acentos(descricao).upper():
+        # Ex. Inter: Histórico "Pix enviado" + Descrição "Fulano" -> "Pix enviado - Fulano"
+        descricao = ' - '.join(p for p in (_celula(linha, i_hist), _celula(linha, i_desc)) if p)
+        if 'SALDO' in _sem_acentos(_celula(linha, i_hist) or descricao).upper() and len(descricao) < 25:
             continue
-        transacoes.append(_transacao(data_, descricao, valor, 'conta'))
-    return _resultado('CSV', 'conta', transacoes)
+        saldo_apos = None
+        if _celula(linha, i_saldo):
+            try:
+                saldo_apos = parse_valor_br(_celula(linha, i_saldo))
+            except InvalidOperation:
+                saldo_apos = None
+        transacoes.append(_transacao(data_, descricao, valor, 'conta', saldo_apos=saldo_apos))
+
+    # Saldo final = saldo da linha mais recente (o arquivo pode estar em ordem crescente ou decrescente)
+    saldo_final = data_saldo = None
+    com_saldo = [t for t in transacoes if t['saldo_apos'] is not None]
+    if com_saldo:
+        decrescente = com_saldo[0]['data'] > com_saldo[-1]['data']
+        ultimo = com_saldo[0] if decrescente else com_saldo[-1]
+        saldo_final, data_saldo = ultimo['saldo_apos'], ultimo['data']
+    return _resultado('CSV', 'conta', transacoes, saldo=saldo_final, data_saldo=data_saldo)
 
 
 # ---------------------------------------------------------------- despacho

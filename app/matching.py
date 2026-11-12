@@ -85,7 +85,7 @@ class SugestorCategoria:
         (r'VIVO|CLARO|TIM\b|OI |NET |INTERNET|TELEFON', 'Internet e Telefone'),
         (r'ENEL|LIGHT|CEMIG|COPEL|SABESP|CEDAE|COMGAS|ENERGIA|AGUA|CONDOMINIO', 'Contas e Serviços'),
         (r'ALUGUEL|IMOBILIARIA', 'Moradia'),
-        (r'SMART ?FIT|ACADEMIA|BLUEFIT|GYMPASS|WELLHUB', 'Academia e Esportes'),
+        (r'SMART ?FIT|ACADEMIA|BLUEFIT|GYMPASS|WELLHUB|TOTALPASS', 'Academia e Esportes'),
         (r'ESCOLA|FACULDADE|CURSO|UDEMY|ALURA|LIVRARIA', 'Educação'),
         (r'HOSPITAL|CLINICA|LABORATORIO|UNIMED|AMIL|SULAMERICA|BRADESCO SAUDE|ODONTO', 'Saúde'),
         (r'IOF|TARIFA|ANUIDADE|JUROS|MULTA|IPVA|IPTU|DARF|IMPOSTO', 'Impostos e Taxas'),
@@ -100,8 +100,20 @@ class SugestorCategoria:
         (r'RESTITUICAO', 'Restituição de Impostos'),
     ]
 
-    def __init__(self, user_id, historico=3000):
+    # Categorias criadas automaticamente quando necessário: (nome, cor)
+    # (o nome da categoria é único por usuário, então receita e despesa têm nomes distintos)
+    ESPECIAIS = {
+        ('transferencia', 'despesa'): ('Transferência enviada (minhas contas)', '#7f8c8d'),
+        ('transferencia', 'receita'): ('Transferência recebida (minhas contas)', '#7f8c8d'),
+        ('fatura', 'despesa'): ('Pagamento de Fatura', '#ff3b57'),
+    }
+    _RE_PAGTO_FATURA = re.compile(r'PAGAMENTO DE FATURA|PAGTO FATURA|PGTO FATURA|PAGAMENTO FATURA|FATURA (DO )?CARTAO')
+
+    def __init__(self, user_id, historico=3000, titular=None):
         self.user_id = user_id
+        # nome completo do titular (>= 2 palavras) para reconhecer transferências entre as próprias contas
+        nome = normalizar_descricao(titular or '')
+        self.titular = nome if len(nome.split()) >= 2 else None
         self.categorias = Categoria.query.filter_by(user_id=user_id).all()
         self._por_nome = {(c.tipo, self._chave_nome(c.nome)): c for c in self.categorias}
         self._por_id = {c.id: c for c in self.categorias}
@@ -123,7 +135,29 @@ class SugestorCategoria:
     def categoria_por_nome(self, nome, tipo):
         return self._por_nome.get((tipo, self._chave_nome(nome)))
 
+    def _especial(self, chave_tipo, tipo):
+        nome, cor = self.ESPECIAIS[(chave_tipo, tipo)]
+        cat = self.categoria_por_nome(nome, tipo)
+        if not cat:
+            existente = Categoria.query.filter_by(user_id=self.user_id, nome=nome).first()
+            if existente:
+                return existente if existente.tipo == tipo else None
+        if not cat:
+            cat = Categoria(nome=nome, tipo=tipo, cor=cor, user_id=self.user_id)
+            db.session.add(cat)
+            db.session.flush()
+            self.categorias.append(cat)
+            self._por_nome[(tipo, self._chave_nome(nome))] = cat
+            self._por_id[cat.id] = cat
+        return cat
+
     def sugerir(self, descricao, tipo):
+        bruto = ''.join(c for c in unicodedata.normalize('NFKD', descricao or '')
+                        if not unicodedata.combining(c)).upper()
+        if tipo == 'despesa' and self._RE_PAGTO_FATURA.search(bruto):
+            return self._especial('fatura', tipo)
+        if self.titular and self.titular in normalizar_descricao(descricao):
+            return self._especial('transferencia', tipo)
         chave = normalizar_descricao(descricao)
         memoria = self.memoria.get(tipo, {})
         if chave and chave in memoria:
@@ -147,7 +181,7 @@ class SugestorCategoria:
             self.memoria[tipo][chave] = categoria_id
 
 
-def processar_matching(itens_extrato, conta_id, user_id, cartao_id=None):
+def processar_matching(itens_extrato, conta_id, user_id, cartao_id=None, titular=None):
     """
     Para cada item do extrato devolve uma cópia com:
       melhor_match (transacao, score) | None, matches (top 5), score_matching,
@@ -158,7 +192,7 @@ def processar_matching(itens_extrato, conta_id, user_id, cartao_id=None):
         return []
     datas = [i['data'] for i in itens_extrato]
     candidatas = _candidatas(user_id, conta_id, cartao_id, min(datas), max(datas))
-    sugestor = SugestorCategoria(user_id)
+    sugestor = SugestorCategoria(user_id, titular=titular)
 
     # pontua todos os pares e atribui do melhor para o pior (guloso), sem repetir transação
     pares = []

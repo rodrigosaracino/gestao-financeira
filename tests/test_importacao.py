@@ -118,7 +118,7 @@ def test_importar_ofx_conta_atualiza_saldo_e_nao_duplica(app, usuarios):
         assert conc2.conta_id == a['conta']  # reconhecida pelo ACCTID
         assert any('já foi importado' in x for x in avisos)
         r2 = importacao.aplicar_conciliacao(conc2)
-        assert r2['por_status'] == {'duplicado': 4} or r2['por_status'].get('importado', 0) == 0
+        assert r2['por_status'] == {'duplicado': 4}
         assert Transacao.query.filter_by(conta_id=a['conta']).count() == 4
         assert db.session.get(Conta, a['conta']).saldo_atual == Decimal('5559.85')
 
@@ -180,7 +180,8 @@ def test_fatura_cartao_lanca_na_fatura_e_limite(app, usuarios):
         assert sugest['PAGAMENTO EFETUADO'] == 'ignorar'
         importacao.aplicar_conciliacao(conc)
         cartao = db.session.get(CartaoCredito, a['cartao'])
-        assert cartao.limite_utilizado == Decimal('319.90')  # 59.90 + 300 - 40
+        # compras 59.90 + 300 - 40 = 319.90; o "PAGAMENTO EFETUADO" de 1200 (fatura anterior) libera o limite
+        assert cartao.limite_utilizado == Decimal('0')
         assert db.session.get(Conta, a['conta']).saldo_atual == Decimal('1000')  # conta não muda
         parc = Transacao.query.filter(Transacao.descricao.like('%PARC%')).one()
         assert (parc.numero_parcela, parc.total_parcelas, parc.forma_pagamento) == (2, 10, 'cartao_credito')
@@ -285,3 +286,112 @@ def test_cli_simulacao_e_aplicar(app, usuarios):
         assert db.session.get(Conta, a['conta']).saldo_atual == Decimal('5559.85')
     r = runner.invoke(args=['importar-extrato', arq, '--usuario', 'naoexiste@x.com'])
     assert r.exit_code != 0
+
+
+# ---------------------------------------------------------------- histórico real (Inter, Nubank)
+
+INTER_CSV = (
+    'Extrato Conta Corrente \nConta ;123456\nPeríodo ;01/01/2026 a 12/11/2026\nSaldo ;1.150,00\n\n'
+    'Data Lançamento;Histórico;Descrição;Valor;Saldo\n'
+    '03/11/2026;Pix recebido;Fulano de Tal;200,00;1.150,00\n'
+    '02/11/2026;Pix enviado ;Maria Exemplo Silva;-50,00;950,00\n'
+    '01/11/2026;Pagamento efetuado;Conta de luz;-0,00;1.000,00\n'
+)
+
+
+def test_csv_inter_combina_historico_e_saldo():
+    from app.parsers import parse_file
+    r = parse_file(INTER_CSV.encode('utf-8'), filename='Extrato.csv')
+    assert r['total'] == 2  # linha de valor zero é ignorada
+    assert r['transactions'][0]['descricao'] == 'Pix recebido - Fulano de Tal'
+    assert r['saldo_final'] == Decimal('1150.00')
+
+
+def test_transferencia_entre_contas_proprias_tem_categoria_propria(app, usuarios):
+    from app.models import Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        conc, _ = importacao.analisar_extrato(a['user'], INTER_CSV.encode('utf-8'), 'Extrato.csv',
+                                              conta_id=a['conta'], titular='Maria Exemplo Silva')
+        r = importacao.aplicar_conciliacao(conc)
+        cats = {t.descricao: t.categoria.nome for t in Transacao.query.filter_by(conta_id=a['conta'])}
+        assert cats['Pix enviado - Maria Exemplo Silva'] == 'Transferência enviada (minhas contas)'
+        assert cats['Pix recebido - Fulano de Tal'] == 'Outras Receitas'
+        assert r['saldo_banco'] == Decimal('1150.00')
+
+
+def test_pagamento_de_fatura_na_conta_tem_categoria():
+    from app.matching import SugestorCategoria
+    from app.models import db
+    # usa app/usuarios via fixture abaixo
+    assert SugestorCategoria._RE_PAGTO_FATURA.search('PAGAMENTO DE FATURA')
+
+
+def test_pagamento_fatura_libera_limite_e_baixa_fatura(app, usuarios):
+    from app.models import db, CartaoCredito, Fatura
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        c1, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao.ofx'), 'f1.ofx', cartao_id=a['cartao'])
+        importacao.aplicar_conciliacao(c1)
+        cartao = db.session.get(CartaoCredito, a['cartao'])
+        # mês 1: 59.90 + 300 - 40 = 319.90; o pagamento de 1200 (de uma fatura anterior não importada) libera limite
+        assert cartao.limite_utilizado == Decimal('0')
+        c2, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao_mes2.ofx'), 'f2.ofx', cartao_id=a['cartao'])
+        r2 = importacao.aplicar_conciliacao(c2)
+        assert r2['por_status'].get('pagamento') == 1
+        outubro = Fatura.query.filter_by(cartao_id=a['cartao'], mes_referencia=10, ano_referencia=2026).one()
+        assert outubro.status == 'paga' and outubro.valor_pago == Decimal('319.90')
+        # reimportar o mês 2 não baixa o pagamento de novo
+        c3, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao_mes2.ofx'), 'f2.ofx', cartao_id=a['cartao'])
+        r3 = importacao.aplicar_conciliacao(c3)
+        assert r3['por_status'] == {'duplicado': 2}
+        # desfazer o mês 2 reabre outubro
+        importacao.desfazer_conciliacao(c2)
+        assert db.session.get(Fatura, outubro.id).status == 'aberta'
+
+
+def test_transferencia_recebida_e_enviada_no_mesmo_extrato(app, usuarios):
+    from app.models import Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    csv = INTER_CSV.replace('Pix recebido;Fulano de Tal', 'Pix recebido;Maria Exemplo Silva')
+    with app.app_context():
+        conc, _ = importacao.analisar_extrato(a['user'], csv.encode('utf-8'), 'Extrato.csv',
+                                              conta_id=a['conta'], titular='Maria Exemplo Silva')
+        importacao.aplicar_conciliacao(conc)
+        nomes = {t.tipo: t.categoria.nome for t in Transacao.query.filter_by(conta_id=a['conta'])}
+        assert nomes == {'receita': 'Transferência recebida (minhas contas)',
+                         'despesa': 'Transferência enviada (minhas contas)'}
+
+
+def test_ofx_nubank_rendimento_no_ballist():
+    from app.parsers import parse_file
+    ofx = (b'OFXHEADER:100\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKACCTFROM><ACCTID>1</BANKACCTFROM>'
+           b'<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260305<TRNAMT>-10.00<FITID>X1<MEMO>Compra</STMTTRN>'
+           b'</BANKTRANLIST><LEDGERBAL><BALAMT>90.82</BALAMT><DTASOF>20260331000000[-3:BRT]</DTASOF></LEDGERBAL>'
+           b'<BALLIST><BAL><NAME>RENDIMENTO LIQUIDO</NAME><DESC>RENDIMENTO LIQUIDO NO PERIODO</DESC>'
+           b'<BALTYPE>NUMBER</BALTYPE><VALUE>0.82</VALUE></BAL></BALLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>')
+    r = parse_file(ofx)
+    rend = [t for t in r['transactions'] if t['descricao'].startswith('Rendimento')]
+    assert len(rend) == 1 and rend[0]['valor'] == Decimal('0.82') and rend[0]['tipo'] == 'receita'
+    assert rend[0]['data'] == date(2026, 3, 31)
+
+
+def test_saldo_em_atraso_da_fatura_e_ignorado(app, usuarios):
+    from app.models import db, CartaoCredito, Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    ofx = (b'OFXHEADER:100\n<OFX><CREDITCARDMSGSRSV1><CCSTMTTRNRS><CCSTMTRS><CCACCTFROM><ACCTID>abc</CCACCTFROM>'
+           b'<BANKTRANLIST>'
+           b'<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260108<TRNAMT>-100.00<FITID>S1<MEMO>Saldo em atraso</STMTTRN>'
+           b'<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260113<TRNAMT>100.00<FITID>S2<MEMO>Pagamento recebido</STMTTRN>'
+           b'<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260115<TRNAMT>-50.00<FITID>S3<MEMO>Padaria</STMTTRN>'
+           b'</BANKTRANLIST></CCSTMTRS></CCSTMTTRNRS></CREDITCARDMSGSRSV1></OFX>')
+    with app.app_context():
+        conc, _ = importacao.analisar_extrato(a['user'], ofx, 'f.ofx', cartao_id=a['cartao'])
+        assert {i.descricao: i.acao_sugerida for i in conc.itens}['Saldo em atraso'] == 'ignorar'
+        importacao.aplicar_conciliacao(conc)
+        assert [t.descricao for t in Transacao.query.filter_by(cartao_credito_id=a['cartao'])] == ['Padaria']
+        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('0')  # 50 - 100 -> 0

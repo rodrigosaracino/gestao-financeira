@@ -1723,6 +1723,7 @@ def conciliacao_nova():
                 secure_filename(arquivo.filename) or 'extrato',
                 conta_id=request.form.get('conta_id') or None,
                 cartao_id=request.form.get('cartao_id') or None,
+                titular=current_user.nome,
             )
             db.session.commit()
         except importacao.ErroImportacao as e:
