@@ -181,8 +181,8 @@ def test_fatura_cartao_lanca_na_fatura_e_limite(app, usuarios):
         importacao.aplicar_conciliacao(conc)
         cartao = db.session.get(CartaoCredito, a['cartao'])
         # compras 59.90 + 300 - 40 = 319.90, + 8 parcelas futuras de 300 (PARC 02/10) = 2719.90;
-        # o "PAGAMENTO EFETUADO" de 1200 (fatura anterior) libera parte do limite
-        assert cartao.limite_utilizado == Decimal('1519.90')
+        # o "PAGAMENTO EFETUADO" de 1200 é de uma fatura anterior que não está no sistema: não libera limite
+        assert cartao.limite_utilizado == Decimal('2719.90')
         assert db.session.get(Conta, a['conta']).saldo_atual == Decimal('1000')  # conta não muda
         parc = Transacao.query.filter(Transacao.descricao.like('%PARC 02%')).one()
         assert (parc.numero_parcela, parc.total_parcelas, parc.forma_pagamento) == (2, 10, 'cartao_credito')
@@ -338,8 +338,8 @@ def test_pagamento_fatura_libera_limite_e_baixa_fatura(app, usuarios):
         c1, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao.ofx'), 'f1.ofx', cartao_id=a['cartao'])
         importacao.aplicar_conciliacao(c1)
         cartao = db.session.get(CartaoCredito, a['cartao'])
-        # mês 1: 319.90 + 2400 em parcelas futuras; o pagamento de 1200 libera parte do limite
-        assert cartao.limite_utilizado == Decimal('1519.90')
+        # mês 1: 319.90 + 2400 em parcelas futuras; o pagamento de 1200 é de fatura fora do sistema
+        assert cartao.limite_utilizado == Decimal('2719.90')
         c2, _ = importacao.analisar_extrato(a['user'], _ler('fatura_cartao_mes2.ofx'), 'f2.ofx', cartao_id=a['cartao'])
         r2 = importacao.aplicar_conciliacao(c2)
         assert r2['por_status'].get('pagamento') == 1
@@ -396,7 +396,8 @@ def test_saldo_em_atraso_da_fatura_e_ignorado(app, usuarios):
         assert {i.descricao: i.acao_sugerida for i in conc.itens}['Saldo em atraso'] == 'ignorar'
         importacao.aplicar_conciliacao(conc)
         assert [t.descricao for t in Transacao.query.filter_by(cartao_credito_id=a['cartao'])] == ['Padaria']
-        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('0')  # 50 - 100 -> 0
+        # o pagamento quita a fatura anterior (fora do sistema): só a compra de 50 usa limite
+        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('50')
 
 
 # ---------------------------------------------------------------- projeção de parcelas
@@ -483,3 +484,43 @@ def test_projecao_com_centavos_diferentes_nao_duplica_nem_preve_passado(app, usu
 def db_cartao(a):
     from app.models import db, CartaoCredito
     return db.session.get(CartaoCredito, a['cartao'])
+
+
+def test_fatura_pdf_estilo_mercado_pago(app, usuarios):
+    """Fecha dia 8, vence dia 13; parcelas antigas vêm com a data da compra; pagamento sem sinal."""
+    from app.models import db, CartaoCredito, Fatura, Transacao
+    from app.parsers import parse_pdf_texto
+    from app.services import importacao
+    a, _ = usuarios
+    texto = """Essa é sua fatura de novembro
+Cartão de crédito - Vencimento: 13/11/2026
+Fechamento da fatura 08/11/2026
+19/10 Pagamento da fatura de outubro/2026 R$ 513,19
+09/11 Juros do rotativo R$ 18,38
+10/09 LOJA A Parcela 2 de 4 R$ 8,74
+16/09 LOJA B Parcela 2 de 15 R$ 432,00
+12/10 LOJA C R$ 80,00
+25/08 LOJA D Parcela 8 de 8 R$ 27,47
+"""
+    r = parse_pdf_texto(texto, hoje=date(2026, 11, 12))
+    pag = [t for t in r['transactions'] if t['eh_pagamento_fatura']]
+    assert len(pag) == 1 and pag[0]['tipo'] == 'receita'
+    with app.app_context():
+        cartao = db.session.get(CartaoCredito, a['cartao'])
+        cartao.dia_fechamento, cartao.dia_vencimento, cartao.limite = 8, 13, Decimal('6700')
+        db.session.commit()
+        # monta a conciliação a partir do texto (sem PDF binário)
+        from unittest import mock
+        with mock.patch('app.services.importacao.parse_file', return_value=r):
+            conc, _ = importacao.analisar_extrato(a['user'], b'%PDF-fake', 'fatura.pdf', cartao_id=a['cartao'])
+        importacao.aplicar_conciliacao(conc)
+        nov = Fatura.query.filter_by(cartao_id=a['cartao'], mes_referencia=11, ano_referencia=2026).one()
+        assert nov.data_vencimento == date(2026, 11, 13)
+        assert nov.valor_total == Decimal('566.59')  # 18.38 + 8.74 + 432 + 80 + 27.47
+        reais = Transacao.query.filter(Transacao.cartao_credito_id == a['cartao'],
+                                       ~Transacao.id_externo.like('PROJ%')).all()
+        assert all(t.data.month == 11 for t in reais)  # parcelas antigas trazidas para a fatura de novembro
+        # limite: 566.59 + 2 x 8.74 + 13 x 432 = 6200.07; o pagamento de outubro (fatura fora do sistema) não libera
+        assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('6200.07')
+        dez = Fatura.query.filter_by(cartao_id=a['cartao'], mes_referencia=12, ano_referencia=2026).one()
+        assert dez.valor_total == Decimal('440.74')  # parcelas 3/4 e 3/15

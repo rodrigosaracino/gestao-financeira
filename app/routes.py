@@ -891,8 +891,11 @@ def obter_ou_criar_fatura(cartao, data_referencia):
     else:
         data_fechamento = date(ano, mes, cartao.dia_fechamento)
 
-    # Calcular data de vencimento (mês seguinte)
-    if mes == 12:
+    # Vencimento: no mesmo mês se o dia de vencimento vem depois do fechamento
+    # (ex.: fecha 8, vence 13); senão no mês seguinte (ex.: fecha 31, vence 8)
+    if cartao.dia_vencimento > cartao.dia_fechamento:
+        mes_vencimento, ano_vencimento = mes, ano
+    elif mes == 12:
         mes_vencimento = 1
         ano_vencimento = ano + 1
     else:
