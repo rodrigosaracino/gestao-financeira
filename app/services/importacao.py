@@ -11,6 +11,7 @@ que os dois caminhos tenham exatamente a mesma regra:
 3. desfazer_conciliacao() -> remove o que a importação criou e devolve o saldo.
 """
 import hashlib
+import re
 from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,6 +32,87 @@ class ErroImportacao(ValueError):
 
 
 # ---------------------------------------------------------------- auxiliares
+
+_RE_SUFIXO_PARCELA = re.compile(r'\s*-?\s*PARC(?:ELA)?\.?\s*\d{1,2}\s*(?:/|DE)\s*\d{1,2}\s*$', re.I)
+
+
+def _base_parcela(descricao):
+    return _RE_SUFIXO_PARCELA.sub('', descricao or '').strip() or (descricao or '')
+
+
+def chave_parcela(cartao_id, descricao, valor, total, numero):
+    """id_externo determinístico de uma parcela prevista (PROJ...)."""
+    base = normalizar_descricao(_base_parcela(descricao))
+    bruto = f'{cartao_id}|{base}|{Decimal(valor):.2f}|{total}|{numero}'
+    return 'PROJ' + hashlib.sha1(bruto.encode('utf-8')).hexdigest()[:36]
+
+
+def projetar_parcelas(transacao, cartao, conciliacao_id=None):
+    """
+    Cria no cartão as parcelas futuras (numero+1 .. total) de uma compra parcelada,
+    cada uma na fatura do seu mês, se ainda não existirem. Retorna quantas criou.
+    """
+    from dateutil.relativedelta import relativedelta
+    n, total = transacao.numero_parcela, transacao.total_parcelas
+    if not (n and total and n < total and transacao.tipo == 'despesa'):
+        return 0
+    base = _base_parcela(transacao.descricao)
+    base_norm = normalizar_descricao(base)
+    ja_existem = {t.numero_parcela for t in Transacao.query.filter_by(
+        cartao_credito_id=cartao.id, total_parcelas=total, valor=transacao.valor).all()
+        if normalizar_descricao(_base_parcela(t.descricao)) == base_norm}
+    criadas = 0
+    for k in range(n + 1, total + 1):
+        if k in ja_existem:
+            continue
+        data_k = transacao.data + relativedelta(months=k - n)
+        fatura = _obter_ou_criar_fatura(cartao, data_k)
+        db.session.add(Transacao(
+            descricao=f'{base} - Parcela {k}/{total}'[:200], valor=transacao.valor, tipo='despesa',
+            data=data_k, forma_pagamento='cartao_credito', cartao_credito_id=cartao.id,
+            fatura_id=fatura.id, conta_id=transacao.conta_id, categoria_id=transacao.categoria_id,
+            parcelado=True, numero_parcela=k, total_parcelas=total, pago=False,
+            transacao_pai_id=transacao.transacao_pai_id or transacao.id,
+            id_externo=chave_parcela(cartao.id, base, transacao.valor, total, k),
+            conciliacao_origem_id=conciliacao_id,
+        ))
+        fatura.valor_total = (fatura.valor_total or 0) + transacao.valor
+        cartao.limite_utilizado = (cartao.limite_utilizado or 0) + transacao.valor
+        criadas += 1
+    db.session.flush()
+    return criadas
+
+
+def _confirmar_prevista(prevista, item, cartao):
+    """A parcela real chegou: atualiza a prevista com os dados do banco."""
+    diferenca = Decimal(item.valor) - Decimal(prevista.valor)
+    if (prevista.data.year, prevista.data.month) != (item.data.year, item.data.month):
+        antiga = db.session.get(Fatura, prevista.fatura_id) if prevista.fatura_id else None
+        if antiga:
+            antiga.valor_total = (antiga.valor_total or 0) - prevista.valor
+        nova_fatura = _obter_ou_criar_fatura(cartao, item.data)
+        nova_fatura.valor_total = (nova_fatura.valor_total or 0) + item.valor
+        prevista.fatura_id = nova_fatura.id
+    elif diferenca and prevista.fatura_id:
+        f = db.session.get(Fatura, prevista.fatura_id)
+        f.valor_total = (f.valor_total or 0) + diferenca
+    if diferenca:
+        cartao.limite_utilizado = max(Decimal('0'), (cartao.limite_utilizado or 0) + diferenca)
+    prevista.valor, prevista.data = item.valor, item.data
+    prevista.descricao = item.descricao[:200]
+    prevista.id_externo = item.id_externo
+    prevista.conciliacao_origem_id = item.conciliacao_id  # agora pertence à importação real
+
+
+def projetar_historico(cartao):
+    """Gera as parcelas futuras a partir da parcela mais recente de cada compra do cartão."""
+    ultimas = {}
+    for t in (Transacao.query.filter(Transacao.cartao_credito_id == cartao.id, Transacao.total_parcelas.isnot(None),
+                                     Transacao.numero_parcela.isnot(None), Transacao.tipo == 'despesa')
+              .order_by(Transacao.numero_parcela).all()):
+        ultimas[(normalizar_descricao(_base_parcela(t.descricao)), Decimal(t.valor), t.total_parcelas)] = t
+    criadas = sum(projetar_parcelas(t, cartao) for t in ultimas.values())
+    return criadas
 
 def hash_conteudo(conteudo):
     return hashlib.sha256(conteudo).hexdigest()
@@ -121,6 +203,8 @@ def _ja_importadas(conta, cartao):
                      db.or_(Transacao.forma_pagamento.is_(None), Transacao.forma_pagamento != 'cartao_credito'))
     ids, assinaturas = set(), Counter()
     for id_ext, data_, valor, tipo, descricao in q.all():
+        if id_ext.startswith('PROJ'):
+            continue  # parcela prevista: será confirmada pela real, não é duplicata
         ids.add(id_ext)
         assinaturas[_assinatura(data_, valor, tipo, descricao)] += 1
     if cartao:
@@ -216,6 +300,13 @@ def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=N
             if item.get('eh_pagamento_fatura') or item.get('eh_saldo_anterior'):
                 # pagamento já sai no extrato da conta; "saldo em atraso" é a fatura anterior repetida
                 acao = 'ignorar'
+            elif parcela:
+                prevista = Transacao.query.filter_by(
+                    cartao_credito_id=cartao.id,
+                    id_externo=chave_parcela(cartao.id, item['descricao'], item['valor'], parcela[1], parcela[0]),
+                ).first()
+                if prevista:
+                    acao, match, score = 'conciliar', (prevista, 100), 100
         db.session.add(ItemConciliacao(
             conciliacao_id=conciliacao.id, data=item['data'], descricao=item['descricao'],
             valor=item['valor'], tipo=item['tipo'], numero_documento=item.get('numero_documento'),
@@ -292,7 +383,9 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                 else:
                     item.transacao_id = alvo.id
                     item.status = 'conciliado'
-                    if not alvo.id_externo:
+                    if cartao and (alvo.id_externo or '').startswith('PROJ'):
+                        _confirmar_prevista(alvo, item, cartao)
+                    elif not alvo.id_externo:
                         alvo.id_externo = item.id_externo
                     if not alvo.pago and alvo.pode_marcar_pago():
                         alvo.pago = True  # o banco confirmou o lançamento
@@ -335,6 +428,8 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                         _aplicar_saldo(conta, item.tipo, item.valor)
                 db.session.add(nova)
                 db.session.flush()
+                if cartao and nova.total_parcelas:
+                    projetar_parcelas(nova, cartao, conciliacao_id=conciliacao.id)
                 sugestor.aprender(item.descricao, item.tipo, categoria.id)
                 item.transacao_id = nova.id
                 item.categoria_sugerida_id = categoria.id
