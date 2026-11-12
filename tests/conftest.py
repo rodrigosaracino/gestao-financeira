@@ -75,7 +75,7 @@ def criar_usuario(nome, email, senha='SenhaForte123'):
     desp = Categoria(nome='Outros', tipo='despesa', cor='#95a5a6', user_id=u.id)
     rec = Categoria(nome='Outras Receitas', tipo='receita', cor='#95a5a6', user_id=u.id)
     cartao = CartaoCredito(nome=f'Cartão {nome}', limite=Decimal('5000'), limite_utilizado=Decimal('0'),
-                           dia_fechamento=5, dia_vencimento=15, user_id=u.id)
+                           dia_fechamento=31, dia_vencimento=8, user_id=u.id)
     db.session.add_all([conta, desp, rec, cartao])
     db.session.commit()
     return {'user': u.id, 'conta': conta.id, 'despesa': desp.id, 'receita': rec.id,

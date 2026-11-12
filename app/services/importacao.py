@@ -92,6 +92,19 @@ def projetar_parcelas(transacao, cartao, conciliacao_id=None):
     return criadas
 
 
+def _data_no_ciclo(data_item, data_fim):
+    """
+    Numa fatura, tudo pertence ao mês da fatura (o mês do último lançamento). Compras
+    parceladas antigas vêm com a data da compra original (ex.: 'Parcela 2 de 15' de
+    setembro na fatura de novembro): trazidas para o mesmo dia no mês da fatura.
+    """
+    import calendar
+    if not data_fim or (data_item.year, data_item.month) >= (data_fim.year, data_fim.month):
+        return data_item
+    dia = min(data_item.day, calendar.monthrange(data_fim.year, data_fim.month)[1])
+    return date(data_fim.year, data_fim.month, dia)
+
+
 def _confirmar_prevista(prevista, item, cartao):
     """A parcela real chegou: atualiza a prevista com os dados do banco."""
     diferenca = Decimal(item.valor) - Decimal(prevista.valor)
@@ -418,7 +431,9 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                     conciliacao_origem_id=conciliacao.id,
                 )
                 if cartao:
-                    fatura = _obter_ou_criar_fatura(cartao, item.data)
+                    ref = _data_no_ciclo(item.data, conciliacao.data_fim)
+                    nova.data = ref
+                    fatura = _obter_ou_criar_fatura(cartao, ref)
                     nova.forma_pagamento = 'cartao_credito'
                     nova.cartao_credito_id = cartao.id
                     nova.fatura_id = fatura.id
@@ -461,7 +476,6 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
 
 def _baixar_faturas(cartao, valor, data_pagamento):
     from datetime import timedelta
-    cartao.limite_utilizado = max(Decimal('0'), (cartao.limite_utilizado or 0) - valor)
     restante = Decimal(valor)
     abertas = (Fatura.query.filter(Fatura.cartao_id == cartao.id, Fatura.status != 'paga',
                                    Fatura.data_vencimento <= data_pagamento + timedelta(days=10))
@@ -478,10 +492,13 @@ def _baixar_faturas(cartao, valor, data_pagamento):
         restante -= pago
         if fatura.valor_pago >= Decimal(fatura.valor_total or 0) - Decimal('0.01'):
             fatura.status = 'paga'
+    # libera só o que quitou de faturas que estão no sistema (pagamento de fatura
+    # anterior ao histórico importado não mexe no limite)
+    aplicado = Decimal(valor) - restante
+    cartao.limite_utilizado = max(Decimal('0'), (cartao.limite_utilizado or 0) - aplicado)
 
 
 def _estornar_baixa(cartao, valor):
-    cartao.limite_utilizado = Decimal(cartao.limite_utilizado or 0) + valor
     restante = Decimal(valor)
     pagas = (Fatura.query.filter(Fatura.cartao_id == cartao.id, Fatura.valor_pago > 0)
              .order_by(Fatura.ano_referencia.desc(), Fatura.mes_referencia.desc()).all())
@@ -490,6 +507,7 @@ def _estornar_baixa(cartao, valor):
             break
         tirar = min(Decimal(fatura.valor_pago), restante)
         fatura.valor_pago = Decimal(fatura.valor_pago) - tirar
+        cartao.limite_utilizado = Decimal(cartao.limite_utilizado or 0) + tirar
         restante -= tirar
         if fatura.valor_pago < Decimal(fatura.valor_total or 0):
             fatura.status = 'aberta'

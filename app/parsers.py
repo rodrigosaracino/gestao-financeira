@@ -98,7 +98,7 @@ def detectar_parcela(descricao):
 
 
 _PAGAMENTO_FATURA = re.compile(
-    r'PAGAMENTO\s+(EFETUADO|RECEBIDO|DE\s+FATURA|FATURA|ONLINE|CARTAO|OBRIGADO)|PGTO\s+(FATURA|DEBITO)|'
+    r'PAGAMENTO\s+(EFETUADO|RECEBIDO|DE\s+FATURA|DA\s+FATURA|FATURA|ONLINE|CARTAO|OBRIGADO)|PGTO\s+(FATURA|DEBITO)|'
     r'PAGTO\s+(FATURA|DEBITO)|PAGAMENTO\s*-\s*OBRIGADO', re.I)
 
 
@@ -305,7 +305,8 @@ def parse_pdf_texto(texto, max_linhas=MAX_LINHAS_PADRAO, hoje=None):
             continue
         if eh_cartao:
             # Na fatura, compras aparecem positivas e créditos negativos: inverter para a convenção.
-            valor = -valor
+            # Pagamento da fatura é sempre crédito, mesmo impresso sem sinal.
+            valor = abs(valor) if eh_pagamento_fatura(descricao) else -valor
         transacoes.append(_transacao(data_, descricao, valor, tipo_extrato, saldo_apos=saldo_apos))
 
     if not transacoes:
