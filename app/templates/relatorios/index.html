@@ -533,7 +533,7 @@
                 for (let i = 0; i < data.categorias.length; i++) {
                     const percentual = (data.valores[i] / data.total * 100).toFixed(1);
                     html += `<tr>
-                        <td><span style="width: 12px; height: 12px; background-color: ${data.cores[i]}; display: inline-block; margin-right: 8px;"></span>${data.categorias[i]}</td>
+                        <td><span style="width: 12px; height: 12px; background-color: ${safeColor(data.cores[i])}; display: inline-block; margin-right: 8px;"></span>${escapeHtml(data.categorias[i])}</td>
                         <td>${data.quantidades[i]} transações</td>
                         <td>R$ ${data.valores[i].toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>${percentual}%</td>
@@ -568,10 +568,10 @@
 
                 data.recorrentes.forEach(rec => {
                     html += `<tr>
-                        <td>${rec.descricao}</td>
-                        <td>${rec.categoria}</td>
+                        <td>${escapeHtml(rec.descricao)}</td>
+                        <td>${escapeHtml(rec.categoria)}</td>
                         <td>R$ ${rec.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td><span class="badge bg-info">${rec.frequencia}</span></td>
+                        <td><span class="badge bg-info">${escapeHtml(rec.frequencia)}</span></td>
                         <td>${new Date(rec.proxima_data).toLocaleDateString('pt-BR')}</td>
                         <td>R$ ${rec.impacto_mensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                     </tr>`;
@@ -646,7 +646,7 @@
                     let statusText = orc.status === 'ok' ? 'OK' : orc.status === 'alerta' ? 'Alerta' : 'Excedido';
 
                     html += `<tr>
-                        <td>${orc.categoria}</td>
+                        <td>${escapeHtml(orc.categoria)}</td>
                         <td>R$ ${orc.orcado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>R$ ${orc.gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td class="${orc.saldo < 0 ? 'text-danger' : 'text-success'}">R$ ${orc.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -719,7 +719,7 @@
                     let statusText = meta.status === 'adiantado' ? 'Adiantado' : meta.status === 'no_prazo' ? 'No Prazo' : 'Atrasado';
 
                     html += `<tr>
-                        <td>${meta.titulo}</td>
+                        <td>${escapeHtml(meta.titulo)}</td>
                         <td>R$ ${meta.alvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>R$ ${meta.acumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>R$ ${meta.faltante.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -787,8 +787,8 @@
                     let corPercentual = cartao.percentual > 80 ? 'danger' : cartao.percentual > 50 ? 'warning' : 'success';
 
                     html += `<tr>
-                        <td>${cartao.nome}</td>
-                        <td>${cartao.bandeira || '-'}</td>
+                        <td>${escapeHtml(cartao.nome)}</td>
+                        <td>${escapeHtml(cartao.bandeira || '-')}</td>
                         <td>R$ ${cartao.limite.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>R$ ${cartao.utilizado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                         <td>R$ ${cartao.disponivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>

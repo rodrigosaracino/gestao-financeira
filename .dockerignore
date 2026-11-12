@@ -60,3 +60,16 @@ htmlcov/
 docs/
 *.md
 !README.md
+
+# Não levar para a imagem de produção
+.claude/
+venv_mac/
+.venv/
+logs/
+*.tar.gz
+*.zip
+popular_dados_teste.py
+scripts/
+extratos/
+*.ofx
+*.pdf

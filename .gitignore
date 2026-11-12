@@ -87,3 +87,16 @@ backups/
 # Deploy
 deploy_*.tar.gz
 temp_deploy/
+
+# Ambientes locais / ferramentas
+venv_mac/
+.venv/
+.claude/
+
+# Extratos bancários (dados sensíveis - nunca commitar)
+extratos/
+*.ofx
+*.OFX
+*.pdf
+!tests/fixtures/*.ofx
+!tests/fixtures/*.pdf

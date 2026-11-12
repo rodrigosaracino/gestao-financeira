@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Dividendos - {{ ativo.ticker }} - Investimentos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-cash-coin"></i> Proventos: {{ ativo.ticker }}</h2>
+        <a href="{{ url_for('investimentos.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <strong>Total recebido:</strong> R$ {{ '%.2f'|format(total_recebido or 0) }}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if dividendos %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Pagamento</th>
+                            <th>Data COM</th>
+                            <th>Tipo</th>
+                            <th class="text-end">Valor/ação</th>
+                            <th class="text-end">Qtd.</th>
+                            <th class="text-end">Total</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in dividendos %}
+                        <tr>
+                            <td>{{ d.data_pagamento.strftime('%d/%m/%Y') if d.data_pagamento else '-' }}</td>
+                            <td>{{ d.data_com.strftime('%d/%m/%Y') if d.data_com else '-' }}</td>
+                            <td>{{ d.tipo|upper }}</td>
+                            <td class="text-end">R$ {{ '%.4f'|format(d.valor_por_acao) }}</td>
+                            <td class="text-end">{{ '%.2f'|format(d.quantidade_acoes) }}</td>
+                            <td class="text-end">R$ {{ '%.2f'|format(d.valor_total) }}</td>
+                            <td>
+                                {% if d.recebido %}<span class="badge bg-success">Recebido</span>
+                                {% else %}<span class="badge bg-secondary">Previsto</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Nenhum provento registrado para este ativo.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

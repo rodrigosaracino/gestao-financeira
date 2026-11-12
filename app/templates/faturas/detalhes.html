@@ -192,6 +192,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('main.pagar_fatura', id=fatura.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body" style="padding: var(--space-lg);">
                     <div class="mb-3">
                         <label for="valor_pago" class="form-label">Valor a Pagar</label>

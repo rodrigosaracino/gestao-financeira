@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: gestao_financeira_db_local
+    restart: always
+    environment:
+      POSTGRES_DB: gestao_financeira
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: gestao_financeira_app_local
+    restart: always
+    command: >
+      sh -c "python init_db.py &&
+             flask db upgrade &&
+             gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 run:app"
+    environment:
+      FLASK_APP: run.py
+      FLASK_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/gestao_financeira}
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env}
+      TRUSTED_PROXIES: "0"
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+      - ./app:/app/app
+      - ./run.py:/app/run.py
+      - ./config.py:/app/config.py
+
+volumes:
+  postgres_data_local:

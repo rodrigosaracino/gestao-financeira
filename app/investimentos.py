@@ -1,7 +1,8 @@
 """
 Blueprint de rotas para módulo de Investimentos
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
+import re
 from flask_login import login_required, current_user
 from app.models import db, Ativo, TipoAtivo, TransacaoAtivo, Dividendo
 from app.services.brapi_service import brapi_service
@@ -42,7 +43,7 @@ def adicionar():
             preco_medio = Decimal(request.form.get('preco_medio', 0))
 
             # Validações
-            if not ticker:
+            if not ticker or not re.fullmatch(r'[A-Z0-9]{4,12}', ticker):
                 flash('Ticker é obrigatório', 'danger')
                 return redirect(url_for('investimentos.adicionar'))
 
@@ -93,11 +94,11 @@ def adicionar():
             return redirect(url_for('investimentos.index'))
 
         except ValueError as e:
-            flash(f'Erro nos valores informados: {str(e)}', 'danger')
+            current_app.logger.exception(e); flash('Erro nos valores informados.', 'danger')
             return redirect(url_for('investimentos.adicionar'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao adicionar ativo: {str(e)}', 'danger')
+            current_app.logger.exception(e); flash('Erro ao adicionar ativo.', 'danger')
             return redirect(url_for('investimentos.adicionar'))
 
     # GET - mostrar formulário
@@ -129,7 +130,7 @@ def editar(ativo_id):
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao atualizar ativo: {str(e)}', 'danger')
+            current_app.logger.exception(e); flash('Erro ao atualizar ativo.', 'danger')
 
     tipos_ativos = TipoAtivo.query.all()
     return render_template('investimentos/editar.html', ativo=ativo, tipos_ativos=tipos_ativos)
@@ -153,7 +154,7 @@ def excluir(ativo_id):
         flash(f'Ativo {ticker} removido da carteira', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir ativo: {str(e)}', 'danger')
+        current_app.logger.exception(e); flash('Erro ao excluir ativo.', 'danger')
 
     return redirect(url_for('investimentos.index'))
 
@@ -191,6 +192,9 @@ def adicionar_transacao(ativo_id):
     if request.method == 'POST':
         try:
             tipo = request.form.get('tipo')
+            if tipo not in ('compra', 'venda'):
+                flash('Tipo de operação inválido.', 'danger')
+                return redirect(url_for('investimentos.adicionar_transacao', ativo_id=ativo_id))
             quantidade = Decimal(request.form.get('quantidade', 0))
             preco_unitario = Decimal(request.form.get('preco_unitario', 0))
             taxa_corretagem = Decimal(request.form.get('taxa_corretagem', 0))
@@ -221,7 +225,7 @@ def adicionar_transacao(ativo_id):
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao registrar transação: {str(e)}', 'danger')
+            current_app.logger.exception(e); flash('Erro ao registrar transação.', 'danger')
 
     return render_template('investimentos/adicionar_transacao.html', ativo=ativo)
 

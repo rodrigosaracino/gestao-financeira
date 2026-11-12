@@ -20,6 +20,7 @@
     </div>
     <div class="card-body">
         <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <!-- Informações sobre Parcelamento (se aplicável) -->
             {% if transacao.parcelado %}
             <div class="alert alert-info mb-4" style="background: rgba(0, 102, 255, 0.08); border: 1px solid rgba(0, 102, 255, 0.2); border-radius: var(--radius-md);">

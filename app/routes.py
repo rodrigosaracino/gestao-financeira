@@ -11,8 +11,44 @@ from app.matching import processar_matching, estatisticas_matching
 from calendar import monthrange
 from collections import defaultdict
 import calendar
+from flask import abort, current_app
+from app.security import get_owned, get_owned_or_404, validate_decimal
 
 bp = Blueprint('main', __name__)
+
+TIPOS_TRANSACAO = ('receita', 'despesa')
+MAX_PARCELAS = 72
+MAX_RECORRENCIAS = 100
+VALOR_MAXIMO = Decimal('999999999.99')
+
+
+def _tipo_valido(tipo):
+    """Garante que o tipo seja 'receita' ou 'despesa' (senão 400)."""
+    if tipo not in TIPOS_TRANSACAO:
+        abort(400)
+    return tipo
+
+
+def _int_limitado(valor, minimo, maximo, padrao):
+    try:
+        n = int(valor)
+    except (TypeError, ValueError):
+        return padrao
+    return max(minimo, min(maximo, n))
+
+
+COR_RE = __import__('re').compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def _cor_valida(cor, padrao='#3498db'):
+    """Aceita apenas cores hexadecimais (#rrggbb) - impede injeção via style=."""
+    return cor if cor and COR_RE.match(cor) else padrao
+
+
+def _erro_interno(mensagem_usuario, exc):
+    """Loga o erro completo no servidor e mostra mensagem genérica ao usuário."""
+    current_app.logger.exception(exc)
+    return mensagem_usuario
 
 # ==================== ROTAS PRINCIPAIS ====================
 
@@ -444,18 +480,19 @@ def nova_transacao():
         # Validar valor da transação
         try:
             valor = Decimal(request.form['valor'])
-            if valor <= 0:
+            if valor <= 0 or valor > VALOR_MAXIMO:
                 flash('O valor deve ser maior que zero!', 'error')
                 return redirect(url_for('main.nova_transacao'))
-        except (ValueError, KeyError):
+        except (ValueError, KeyError, ArithmeticError):
             flash('Valor inválido!', 'error')
             return redirect(url_for('main.nova_transacao'))
 
         if forma_pagamento == 'cartao_credito':
             # Pagamento com cartão de crédito
             cartao_id = request.form.get('cartao_credito_id')
-            total_parcelas = int(request.form.get('total_parcelas', 1))
+            total_parcelas = _int_limitado(request.form.get('total_parcelas', 1), 1, MAX_PARCELAS, 1)
             valor_total = Decimal(request.form['valor'])
+            categoria = get_owned_or_404(Categoria, request.form.get('categoria_id'))
             valor_parcela = valor_total / total_parcelas
             data_compra = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
 
@@ -511,7 +548,7 @@ def nova_transacao():
                     total_parcelas=total_parcelas,
                     transacao_pai_id=primeira_transacao_id,  # Vincula à primeira parcela
                     conta_id=conta_id_form,
-                    categoria_id=request.form['categoria_id'],
+                    categoria_id=categoria.id,
                     fatura_id=fatura.id
                 )
                 db.session.add(transacao_parcela)
@@ -536,15 +573,17 @@ def nova_transacao():
             # Pagamento em dinheiro/débito
             recorrente = 'recorrente' in request.form
             pago = 'pago' in request.form
+            conta = get_owned_or_404(Conta, request.form.get('conta_id'))
+            categoria = get_owned_or_404(Categoria, request.form.get('categoria_id'))
 
             transacao = Transacao(
                 descricao=request.form['descricao'],
-                valor=Decimal(request.form['valor']),
-                tipo=request.form['tipo'],
+                valor=valor,
+                tipo=_tipo_valido(request.form.get('tipo')),
                 data=datetime.strptime(request.form['data'], '%Y-%m-%d').date(),
                 forma_pagamento='dinheiro',
-                conta_id=request.form['conta_id'],
-                categoria_id=request.form['categoria_id'],
+                conta_id=conta.id,
+                categoria_id=categoria.id,
                 recorrente=recorrente,
                 pago=pago
             )
@@ -553,7 +592,7 @@ def nova_transacao():
             if recorrente:
                 frequencia = request.form.get('frequencia_recorrencia')
                 data_inicio = datetime.strptime(request.form['data_inicio_recorrencia'], '%Y-%m-%d').date()
-                quantidade = int(request.form.get('quantidade_recorrencias', 12))
+                quantidade = _int_limitado(request.form.get('quantidade_recorrencias', 12), 1, MAX_RECORRENCIAS, 12)
 
                 transacao.frequencia_recorrencia = frequencia
                 transacao.data_inicio_recorrencia = data_inicio
@@ -562,7 +601,6 @@ def nova_transacao():
             # Atualizar saldo da conta apenas se a transação estiver marcada como paga
             # e a data for hoje ou no passado
             if pago and transacao.data <= date.today():
-                conta = Conta.query.get(transacao.conta_id)
                 if transacao.tipo == 'receita':
                     conta.saldo_atual += transacao.valor
                 else:
@@ -584,7 +622,6 @@ def nova_transacao():
 
                     # Atualizar saldo para transações passadas que foram marcadas como pagas
                     if pago:
-                        conta = Conta.query.get(transacao.conta_id)
                         for trans in transacoes_geradas:
                             if trans.pago and trans.data <= date.today():
                                 if trans.tipo == 'receita':
@@ -598,7 +635,7 @@ def nova_transacao():
                     flash(f'Transação recorrente criada com sucesso! {total_geradas} transações foram geradas.', 'success')
                 except Exception as e:
                     db.session.rollback()
-                    flash(f'Erro ao gerar transações recorrentes: {str(e)}', 'error')
+                    flash(_erro_interno('Erro ao gerar transações recorrentes.', e), 'error')
                     return redirect(url_for('main.nova_transacao'))
             else:
                 db.session.commit()
@@ -623,42 +660,51 @@ def editar_transacao(id):
     ).first_or_404()
 
     if request.method == 'POST':
-        # Reverter o efeito da transação anterior no saldo
-        conta_anterior = Conta.query.get(transacao.conta_id)
-        if transacao.tipo == 'receita':
-            conta_anterior.saldo_atual -= transacao.valor
-        else:
-            conta_anterior.saldo_atual += transacao.valor
+        # Validar posse de TODOS os ids vindos do formulário antes de alterar algo
+        conta_nova = get_owned_or_404(Conta, request.form.get('conta_id'))
+        categoria = get_owned_or_404(Categoria, request.form.get('categoria_id'))
+        forma_pagamento = request.form.get('forma_pagamento', 'dinheiro')
+        cartao = None
+        if forma_pagamento == 'cartao_credito':
+            cartao = get_owned_or_404(CartaoCredito, request.form.get('cartao_credito_id'))
+        novo_valor = validate_decimal(request.form.get('valor'), min_value=Decimal('0.01'), max_value=VALOR_MAXIMO)
+        if novo_valor is None:
+            flash('Valor inválido!', 'error')
+            return redirect(url_for('main.editar_transacao', id=id))
+        novo_tipo = _tipo_valido(request.form.get('tipo'))
+
+        # Reverter o efeito da transação anterior no saldo (só se estava paga)
+        if transacao.pago:
+            conta_anterior = transacao.conta
+            if transacao.tipo == 'receita':
+                conta_anterior.saldo_atual -= transacao.valor
+            else:
+                conta_anterior.saldo_atual += transacao.valor
 
         # Atualizar os dados da transação
         transacao.descricao = request.form['descricao']
-        transacao.valor = Decimal(request.form['valor'])
-        transacao.tipo = request.form['tipo']
+        transacao.valor = novo_valor
+        transacao.tipo = novo_tipo
         transacao.data = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
-        transacao.categoria_id = request.form['categoria_id']
-
-        # Atualizar forma de pagamento
-        transacao.forma_pagamento = request.form.get('forma_pagamento', 'dinheiro')
+        transacao.categoria_id = categoria.id
+        transacao.forma_pagamento = forma_pagamento
 
         # Atualizar cartão de crédito (se aplicável)
-        if transacao.forma_pagamento == 'cartao_credito':
-            transacao.cartao_credito_id = request.form.get('cartao_credito_id')
+        if cartao is not None:
+            transacao.cartao_credito_id = cartao.id
         else:
             transacao.cartao_credito_id = None
             # Atualizar status de pago (apenas para não-cartão)
             transacao.pago = 'pago' in request.form
 
-        # Atualizar conta se foi alterada
-        nova_conta_id = int(request.form['conta_id'])
-        if nova_conta_id != transacao.conta_id:
-            transacao.conta_id = nova_conta_id
+        transacao.conta_id = conta_nova.id
 
-        # Aplicar o novo efeito no saldo
-        conta_nova = Conta.query.get(transacao.conta_id)
-        if transacao.tipo == 'receita':
-            conta_nova.saldo_atual += transacao.valor
-        else:
-            conta_nova.saldo_atual -= transacao.valor
+        # Aplicar o novo efeito no saldo (só se paga)
+        if transacao.pago:
+            if transacao.tipo == 'receita':
+                conta_nova.saldo_atual += transacao.valor
+            else:
+                conta_nova.saldo_atual -= transacao.valor
 
         db.session.commit()
         flash('Transação atualizada com sucesso!', 'success')
@@ -725,11 +771,7 @@ def deletar_transacao(id):
 @login_required
 def toggle_pago_transacao(id):
     """Marcar/desmarcar transação como paga/recebida"""
-    transacao = Transacao.query.get_or_404(id)
-
-    # Verificar se a transação pertence ao usuário logado
-    if transacao.conta.user_id != current_user.id:
-        return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+    transacao = get_owned_or_404(Transacao, id)
 
     # Verificar se a transação pode ser marcada como paga
     if not transacao.pode_marcar_pago():
@@ -781,27 +823,37 @@ def criar_transacao_inline():
             return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
 
         # Verificar se a conta pertence ao usuário
-        conta = Conta.query.filter_by(id=int(data['conta_id']), user_id=current_user.id).first()
+        conta = get_owned(Conta, data.get('conta_id'))
         if not conta:
-            return jsonify({'success': False, 'message': 'Conta não encontrada ou acesso negado'}), 403
+            return jsonify({'success': False, 'message': 'Conta não encontrada'}), 404
+
+        categoria = get_owned(Categoria, data.get('categoria_id'))
+        if not categoria:
+            return jsonify({'success': False, 'message': 'Categoria não encontrada'}), 404
+        if data.get('tipo') not in TIPOS_TRANSACAO:
+            return jsonify({'success': False, 'message': 'Tipo inválido'}), 400
+        valor = validate_decimal(data.get('valor'), min_value=Decimal('0.01'), max_value=VALOR_MAXIMO)
+        if valor is None:
+            return jsonify({'success': False, 'message': 'Valor inválido'}), 400
 
         # Criar transação
         transacao = Transacao(
-            descricao=data['descricao'],
-            valor=Decimal(str(data['valor'])),
+            descricao=str(data['descricao'])[:200],
+            valor=valor,
             tipo=data['tipo'],
             data=datetime.strptime(data['data'], '%Y-%m-%d').date(),
-            categoria_id=int(data['categoria_id']),
-            conta_id=int(data['conta_id']),
+            categoria_id=categoria.id,
+            conta_id=conta.id,
             forma_pagamento='dinheiro',
-            pago=data.get('pago', False)
+            pago=bool(data.get('pago', False))
         )
 
-        # Atualizar saldo da conta
-        if transacao.tipo == 'receita':
-            conta.saldo_atual += transacao.valor
-        else:
-            conta.saldo_atual -= transacao.valor
+        # Atualizar saldo da conta (apenas se paga e não futura)
+        if transacao.pago and transacao.data <= date.today():
+            if transacao.tipo == 'receita':
+                conta.saldo_atual += transacao.valor
+            else:
+                conta.saldo_atual -= transacao.valor
 
         db.session.add(transacao)
         db.session.commit()
@@ -814,7 +866,7 @@ def criar_transacao_inline():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': _erro_interno('Erro ao criar transação.', e)}), 500
 
 
 def obter_ou_criar_fatura(cartao, data_referencia):
@@ -981,9 +1033,9 @@ def nova_categoria():
     """Criar nova categoria"""
     if request.method == 'POST':
         categoria = Categoria(
-            nome=request.form['nome'],
-            tipo=request.form['tipo'],
-            cor=request.form.get('cor', '#3498db'),
+            nome=request.form['nome'][:100],
+            tipo=_tipo_valido(request.form.get('tipo')),
+            cor=_cor_valida(request.form.get('cor')),
             user_id=current_user.id
         )
         db.session.add(categoria)
@@ -1003,7 +1055,7 @@ def api_criar_categoria():
 
         nome = data.get('nome', '').strip()
         tipo = data.get('tipo', '').strip()
-        cor = data.get('cor', '#3498db')
+        cor = _cor_valida(data.get('cor'))
 
         if not nome or not tipo:
             return jsonify({'erro': 'Nome e tipo são obrigatórios'}), 400
@@ -1035,7 +1087,7 @@ def api_criar_categoria():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'erro': str(e)}), 500
+        return jsonify({'erro': _erro_interno('Erro ao criar categoria.', e)}), 500
 
 
 # ==================== CARTÕES DE CRÉDITO ====================
@@ -1099,9 +1151,13 @@ def editar_cartao(id):
         cartao.bandeira = request.form['bandeira']
         cartao.banco_emissor = request.form.get('banco_emissor')
         cartao.numero_cartao = request.form.get('numero_cartao')
-        cartao.limite = Decimal(request.form['limite'])
-        cartao.dia_fechamento = int(request.form['dia_fechamento'])
-        cartao.dia_vencimento = int(request.form['dia_vencimento'])
+        limite = validate_decimal(request.form.get('limite'), min_value=Decimal('0'), max_value=VALOR_MAXIMO)
+        if limite is None:
+            flash('Limite inválido!', 'error')
+            return redirect(url_for('main.editar_cartao', id=id))
+        cartao.limite = limite
+        cartao.dia_fechamento = _int_limitado(request.form.get('dia_fechamento'), 1, 31, cartao.dia_fechamento)
+        cartao.dia_vencimento = _int_limitado(request.form.get('dia_vencimento'), 1, 31, cartao.dia_vencimento)
         cartao.ativo = 'ativo' in request.form
         db.session.commit()
         flash('Cartão atualizado com sucesso!', 'success')
@@ -1170,7 +1226,14 @@ def pagar_fatura(id):
         Fatura.id == id,
         CartaoCredito.user_id == current_user.id
     ).first_or_404()
-    valor_pago = Decimal(request.form.get('valor_pago', fatura.valor_total))
+    valor_pago = validate_decimal(request.form.get('valor_pago', fatura.valor_total),
+                                  min_value=Decimal('0'), max_value=VALOR_MAXIMO)
+    if valor_pago is None:
+        flash('Valor pago inválido!', 'error')
+        return redirect(url_for('main.ver_fatura', id=id))
+    conta_pagamento = None
+    if request.form.get('conta_id'):
+        conta_pagamento = get_owned_or_404(Conta, request.form.get('conta_id'))
 
     fatura.valor_pago = valor_pago
     if valor_pago >= fatura.valor_total:
@@ -1180,7 +1243,7 @@ def pagar_fatura(id):
         cartao.limite_utilizado -= fatura.valor_total
 
     # Criar transação de pagamento na conta
-    if 'conta_id' in request.form:
+    if conta_pagamento is not None:
         # Obter ou criar categoria para pagamento de fatura do usuário logado
         categoria_fatura = Categoria.query.filter_by(nome='Pagamento de Fatura', user_id=current_user.id).first()
         if not categoria_fatura:
@@ -1193,13 +1256,12 @@ def pagar_fatura(id):
             valor=valor_pago,
             tipo='despesa',
             data=date.today(),
-            conta_id=request.form['conta_id'],
+            conta_id=conta_pagamento.id,
             categoria_id=categoria_fatura.id,
             pago=True  # Marcar como pago automaticamente
         )
 
-        conta = Conta.query.get(request.form['conta_id'])
-        conta.saldo_atual -= valor_pago
+        conta_pagamento.saldo_atual -= valor_pago
 
         db.session.add(transacao)
 
@@ -1467,7 +1529,9 @@ def api_progresso_metas():
 def api_comparacao_periodos():
     """API: Comparação entre diferentes períodos"""
     tipo = request.args.get('tipo', 'mensal')  # mensal, trimestral, anual
-    quantidade = request.args.get('quantidade', 6, type=int)
+    quantidade = _int_limitado(request.args.get('quantidade', 6), 1, 36, 6)
+    if tipo not in ('mensal', 'trimestral', 'anual'):
+        tipo = 'mensal'
 
     periodos = []
     receitas = []
@@ -1529,7 +1593,7 @@ def api_top_categorias():
     """API: Top categorias por gastos"""
     mes = request.args.get('mes', datetime.now().month, type=int)
     ano = request.args.get('ano', datetime.now().year, type=int)
-    limite = request.args.get('limite', 10, type=int)
+    limite = _int_limitado(request.args.get('limite', 10), 1, 50, 10)
 
     resultados = db.session.query(
         Categoria.nome,
@@ -1733,7 +1797,7 @@ def conciliacao_nova():
 
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao processar arquivo: {str(e)}', 'danger')
+            flash(_erro_interno('Erro ao processar arquivo. Verifique se é um extrato válido.', e), 'danger')
             return redirect(request.url)
 
     # GET: Mostrar formulário
@@ -1810,7 +1874,8 @@ def conciliacao_processar(id):
             if acao == 'conciliar':
                 # Conciliar com transação existente
                 if len(partes) >= 3:
-                    transacao_id = int(partes[2])
+                    transacao_alvo = get_owned(Transacao, partes[2])
+                    transacao_id = transacao_alvo.id if transacao_alvo else None
                 else:
                     transacao_id = item.transacao_id
 
@@ -1821,9 +1886,8 @@ def conciliacao_processar(id):
 
             elif acao == 'importar':
                 # Importar como nova transação
-                categoria_id = request.form.get(f'categoria_{item_id}', type=int)
-                if not categoria_id:
-                    categoria_id = item.categoria_sugerida_id
+                categoria_escolhida = get_owned(Categoria, request.form.get(f'categoria_{item_id}'))
+                categoria_id = categoria_escolhida.id if categoria_escolhida else item.categoria_sugerida_id
 
                 nova_transacao = Transacao(
                     descricao=item.descricao,
@@ -1858,7 +1922,7 @@ def conciliacao_processar(id):
 
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao processar conciliação: {str(e)}', 'danger')
+        flash(_erro_interno('Erro ao processar conciliação.', e), 'danger')
         return redirect(url_for('main.conciliacao_revisar', id=id))
 
 
@@ -1877,7 +1941,7 @@ def conciliacao_excluir(id):
         flash('Conciliação excluída com sucesso', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir conciliação: {str(e)}', 'danger')
+        flash(_erro_interno('Erro ao excluir conciliação.', e), 'danger')
 
     return redirect(url_for('main.conciliacao_lista'))
 
@@ -1951,7 +2015,7 @@ def listar_orcamentos():
 def novo_orcamento():
     """Criar novo orçamento"""
     if request.method == 'POST':
-        categoria_id = int(request.form['categoria_id'])
+        categoria_id = get_owned_or_404(Categoria, request.form.get('categoria_id')).id
         mes = int(request.form['mes'])
         ano = int(request.form['ano'])
         valor_limite = Decimal(request.form['valor_limite'])
@@ -2083,6 +2147,8 @@ def nova_meta():
         data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
         data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
         conta_id = request.form.get('conta_id')
+        if conta_id:
+            conta_id = get_owned_or_404(Conta, conta_id).id
 
         if data_fim <= data_inicio:
             flash('A data fim deve ser posterior à data de início!', 'error')
@@ -2154,6 +2220,8 @@ def editar_meta(id):
         meta.data_inicio = datetime.strptime(request.form['data_inicio'], '%Y-%m-%d').date()
         meta.data_fim = datetime.strptime(request.form['data_fim'], '%Y-%m-%d').date()
         conta_id = request.form.get('conta_id')
+        if conta_id:
+            conta_id = get_owned_or_404(Conta, conta_id).id
         meta.conta_id = conta_id if conta_id else None
 
         db.session.commit()

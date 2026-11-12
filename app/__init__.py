@@ -5,6 +5,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 from app.models import db
 import logging
@@ -20,6 +21,13 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Confiar apenas no proxy reverso (Traefik) para IP/protocolo do cliente.
+    # Assim request.remote_addr passa a ser o IP real e X-Forwarded-For
+    # forjado pelo cliente é ignorado.
+    proxies = app.config.get('TRUSTED_PROXIES', 1)
+    if proxies:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxies, x_proto=proxies, x_host=proxies)
+
     # Inicializar extensões de segurança
     db.init_app(app)
     migrate.init_app(app, db)
@@ -27,14 +35,15 @@ def create_app(config_class=Config):
     limiter.init_app(app)
 
     # Configurar Talisman (HTTPS e Security Headers)
-    if app.config.get('FLASK_ENV') == 'production':
+    if app.config.get('IS_PRODUCTION') and not app.config.get('TESTING'):
         Talisman(app,
                 force_https=app.config.get('TALISMAN_FORCE_HTTPS', True),
                 strict_transport_security=app.config.get('TALISMAN_STRICT_TRANSPORT_SECURITY', True),
-                content_security_policy=app.config.get('TALISMAN_CONTENT_SECURITY_POLICY'))
+                content_security_policy=app.config.get('TALISMAN_CONTENT_SECURITY_POLICY'),
+                session_cookie_secure=True)
 
     # Configurar logging de segurança
-    if not app.debug:
+    if not app.debug and not app.config.get('TESTING'):
         if not os.path.exists('logs'):
             os.mkdir('logs')
 
@@ -68,7 +77,7 @@ def create_app(config_class=Config):
     @login_manager.user_loader
     def load_user(user_id):
         from app.models import User
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
 
     # Middleware de segurança
     @app.before_request
@@ -96,9 +105,6 @@ def create_app(config_class=Config):
 
         # Prevenir clickjacking
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-
-        # XSS Protection
-        response.headers['X-XSS-Protection'] = '1; mode=block'
 
         # Referrer Policy
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'

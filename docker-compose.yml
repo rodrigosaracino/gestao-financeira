@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: gestao_financeira
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
     # ports:
     #   - "5432:5432"
     volumes:
@@ -27,10 +27,12 @@ services:
     environment:
       FLASK_APP: run.py
       FLASK_ENV: production
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@db:5432/gestao_financeira}
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no .env}
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY no .env}
+      TRUSTED_PROXIES: "1"
+    # Só acessível pela própria VPS (o público entra pelo Traefik com TLS)
     ports:
-      - "8001:5000"
+      - "127.0.0.1:8001:5000"
     depends_on:
       db:
         condition: service_healthy

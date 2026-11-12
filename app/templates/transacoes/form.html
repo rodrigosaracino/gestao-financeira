@@ -329,8 +329,8 @@ document.addEventListener('DOMContentLoaded', function() {
     {% for categoria in categorias %}
     categorias.push({
         id: {{ categoria.id }},
-        nome: "{{ categoria.nome }}",
-        tipo: "{{ categoria.tipo }}"
+        nome: {{ categoria.nome|tojson }},
+        tipo: {{ categoria.tipo|tojson }}
     });
     {% endfor %}
 

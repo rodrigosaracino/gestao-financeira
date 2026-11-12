@@ -76,11 +76,13 @@
                 </a>
                 {% if meta.status == 'ativa' %}
                 <form method="POST" action="{{ url_for('main.concluir_meta', id=meta.id) }}" style="display: inline;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-success">
                         <i class="bi bi-check-circle"></i> Marcar como Concluída
                     </button>
                 </form>
                 <form method="POST" action="{{ url_for('main.cancelar_meta', id=meta.id) }}" style="display: inline;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-warning">
                         <i class="bi bi-x-circle"></i> Cancelar Meta
                     </button>
@@ -88,6 +90,7 @@
                 {% endif %}
                 <form method="POST" action="{{ url_for('main.deletar_meta', id=meta.id) }}" style="display: inline;"
                       onsubmit="return confirm('Tem certeza que deseja excluir esta meta?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger">
                         <i class="bi bi-trash"></i> Excluir
                     </button>
@@ -104,6 +107,7 @@
         </div>
         <div class="card-body">
             <form method="POST" action="{{ url_for('main.adicionar_deposito', id=meta.id) }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row">
                     <div class="col-md-4">
                         <div class="mb-3">
@@ -166,6 +170,7 @@
                                       action="{{ url_for('main.deletar_deposito', meta_id=meta.id, deposito_id=deposito.id) }}"
                                       style="display: inline;"
                                       onsubmit="return confirm('Tem certeza que deseja remover este depósito?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
                                     </button>

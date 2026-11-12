@@ -7,6 +7,20 @@ from datetime import datetime, timedelta
 from flask import current_app
 
 
+import re
+from urllib.parse import quote
+
+_TICKER_RE = re.compile(r'^[A-Z0-9]{4,12}$')
+
+
+def _ticker_seguro(ticker):
+    """Valida o ticker antes de colocá-lo no caminho da URL."""
+    ticker = (ticker or '').upper().strip()
+    if not _TICKER_RE.match(ticker):
+        raise ValueError('Ticker inválido')
+    return quote(ticker, safe='')
+
+
 class BrapiService:
     """Serviço para integração com brapi.dev"""
 
@@ -29,7 +43,7 @@ class BrapiService:
             dict: Dados da cotação ou None em caso de erro
         """
         try:
-            url = f"{self.BASE_URL}/quote/{ticker}"
+            url = f"{self.BASE_URL}/quote/{_ticker_seguro(ticker)}"
             response = self.session.get(url, timeout=10)
 
             if response.status_code == 200:
@@ -93,7 +107,7 @@ class BrapiService:
             dict: Informações do ativo ou None
         """
         try:
-            url = f"{self.BASE_URL}/quote/{ticker}"
+            url = f"{self.BASE_URL}/quote/{_ticker_seguro(ticker)}"
             params = {
                 'fundamental': 'true',  # Apenas disponível em planos pagos
                 'dividends': 'true'     # Apenas disponível em planos pagos
