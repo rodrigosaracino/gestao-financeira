@@ -41,9 +41,12 @@ def _base_parcela(descricao):
 
 
 def chave_parcela(cartao_id, descricao, valor, total, numero):
-    """id_externo determinístico de uma parcela prevista (PROJ...)."""
+    """
+    id_externo determinístico de uma parcela prevista (PROJ...). Não usa o valor:
+    os bancos arredondam e a 1ª parcela costuma ter centavos diferentes das demais.
+    """
     base = normalizar_descricao(_base_parcela(descricao))
-    bruto = f'{cartao_id}|{base}|{Decimal(valor):.2f}|{total}|{numero}'
+    bruto = f'{cartao_id}|{base}|{total}|{numero}'
     return 'PROJ' + hashlib.sha1(bruto.encode('utf-8')).hexdigest()[:36]
 
 
@@ -58,14 +61,20 @@ def projetar_parcelas(transacao, cartao, conciliacao_id=None):
         return 0
     base = _base_parcela(transacao.descricao)
     base_norm = normalizar_descricao(base)
-    ja_existem = {t.numero_parcela for t in Transacao.query.filter_by(
-        cartao_credito_id=cartao.id, total_parcelas=total, valor=transacao.valor).all()
-        if normalizar_descricao(_base_parcela(t.descricao)) == base_norm}
+    do_cartao = Transacao.query.filter_by(cartao_credito_id=cartao.id, total_parcelas=total).all()
+    ja_existem = {t.numero_parcela for t in do_cartao
+                  if normalizar_descricao(_base_parcela(t.descricao)) == base_norm}
+    # nunca prever parcela num mês que já tem fatura real importada
+    ultima_real = db.session.query(db.func.max(Transacao.data)).filter(
+        Transacao.cartao_credito_id == cartao.id,
+        db.or_(Transacao.id_externo.is_(None), ~Transacao.id_externo.like('PROJ%'))).scalar()
     criadas = 0
     for k in range(n + 1, total + 1):
         if k in ja_existem:
             continue
         data_k = transacao.data + relativedelta(months=k - n)
+        if ultima_real and (data_k.year, data_k.month) <= (ultima_real.year, ultima_real.month):
+            continue
         fatura = _obter_ou_criar_fatura(cartao, data_k)
         db.session.add(Transacao(
             descricao=f'{base} - Parcela {k}/{total}'[:200], valor=transacao.valor, tipo='despesa',
@@ -110,7 +119,7 @@ def projetar_historico(cartao):
     for t in (Transacao.query.filter(Transacao.cartao_credito_id == cartao.id, Transacao.total_parcelas.isnot(None),
                                      Transacao.numero_parcela.isnot(None), Transacao.tipo == 'despesa')
               .order_by(Transacao.numero_parcela).all()):
-        ultimas[(normalizar_descricao(_base_parcela(t.descricao)), Decimal(t.valor), t.total_parcelas)] = t
+        ultimas[(normalizar_descricao(_base_parcela(t.descricao)), t.total_parcelas)] = t
     criadas = sum(projetar_parcelas(t, cartao) for t in ultimas.values())
     return criadas
 
