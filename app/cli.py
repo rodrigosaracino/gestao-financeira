@@ -61,7 +61,7 @@ def _imprimir(conciliacao, r, simulacao, detalhado):
         click.echo(f'  ignorar (ex.: pagamento de fatura): {s.get("ignorar", 0)}')
         click.echo(f'  impacto dos novos:       {_fmt(r["impacto_sugerido"])}')
     else:
-        for k in ('importado', 'conciliado', 'duplicado', 'ignorado'):
+        for k in ('importado', 'conciliado', 'duplicado', 'pagamento', 'ignorado'):
             click.echo(f'  {k}: {r["por_status"].get(k, 0)}')
     if r['saldo_banco'] is not None:
         click.echo(f'Saldo no banco: {_fmt(r["saldo_banco"])} | saldo no sistema: {_fmt(r["saldo_sistema"])}'
@@ -84,8 +84,9 @@ def _imprimir(conciliacao, r, simulacao, detalhado):
 @click.option('--aplicar', is_flag=True, help='Grava de fato. Sem isso é só simulação.')
 @click.option('--detalhado', is_flag=True, help='Lista cada lançamento.')
 @click.option('--json', 'saida_json', is_flag=True, help='Saída em JSON.')
+@click.option('--titular', help='Seu nome completo, para reconhecer transferências entre suas contas.')
 @with_appcontext
-def importar_extrato(arquivo, usuario, conta, cartao, aplicar, detalhado, saida_json):
+def importar_extrato(arquivo, usuario, conta, cartao, aplicar, detalhado, saida_json, titular):
     """Importa um extrato (OFX/PDF/CSV) usando as mesmas regras da tela de Conciliação."""
     user = _usuario(usuario)
     conta_id = _resolver(Conta, user.id, conta)
@@ -94,7 +95,8 @@ def importar_extrato(arquivo, usuario, conta, cartao, aplicar, detalhado, saida_
         conteudo = fh.read(importacao.TAMANHO_MAXIMO + 1)
     try:
         conciliacao, avisos = importacao.analisar_extrato(
-            user.id, conteudo, os.path.basename(arquivo), conta_id=conta_id, cartao_id=cartao_id)
+            user.id, conteudo, os.path.basename(arquivo), conta_id=conta_id, cartao_id=cartao_id,
+            titular=titular)
         if aplicar:
             r = importacao.aplicar_conciliacao(conciliacao)
         else:

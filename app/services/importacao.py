@@ -18,7 +18,7 @@ from decimal import Decimal
 from app.matching import SugestorCategoria, normalizar_descricao, processar_matching
 from app.models import (db, CartaoCredito, Categoria, ConciliacaoBancaria, Conta, Fatura,
                         ItemConciliacao, Transacao)
-from app.parsers import ExtratoInvalido, detect_format, detectar_parcela, parse_file
+from app.parsers import ExtratoInvalido, detect_format, detectar_parcela, eh_pagamento_fatura, parse_file
 
 EXTENSOES_PERMITIDAS = {'ofx', 'pdf', 'csv', 'txt'}
 TAMANHO_MAXIMO = 16 * 1024 * 1024
@@ -123,12 +123,19 @@ def _ja_importadas(conta, cartao):
     for id_ext, data_, valor, tipo, descricao in q.all():
         ids.add(id_ext)
         assinaturas[_assinatura(data_, valor, tipo, descricao)] += 1
+    if cartao:
+        # pagamentos de fatura já baixados não viram transação: lembrar pelos itens
+        pagos = (db.session.query(ItemConciliacao.id_externo)
+                 .join(ConciliacaoBancaria, ItemConciliacao.conciliacao_id == ConciliacaoBancaria.id)
+                 .filter(ConciliacaoBancaria.cartao_credito_id == cartao.id,
+                         ItemConciliacao.status == 'pagamento', ItemConciliacao.id_externo.isnot(None)))
+        ids.update(i for (i,) in pagos.all())
     return ids, assinaturas
 
 
 # ---------------------------------------------------------------- 1. analisar
 
-def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=None):
+def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=None, titular=None):
     """
     Lê o extrato e cria uma ConciliacaoBancaria 'pendente_revisao' (flush, sem commit).
     Retorna (conciliacao, avisos).
@@ -178,7 +185,11 @@ def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=N
             novos.append(item)
 
     # processar_matching devolve cópias na mesma ordem da entrada
-    processados_lista = processar_matching(novos, conta.id, user_id, cartao_id=cartao.id if cartao else None)
+    if titular is None:
+        from app.models import User
+        titular = getattr(db.session.get(User, user_id), 'nome', None)
+    processados_lista = processar_matching(novos, conta.id, user_id, cartao_id=cartao.id if cartao else None,
+                                           titular=titular)
     mapa = {id(orig): proc for orig, proc in zip(novos, processados_lista)}
 
     conciliacao = ConciliacaoBancaria(
@@ -202,8 +213,9 @@ def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=N
             categoria = proc['categoria_sugerida']
             acao = proc['status_sugerido']
             status = 'pendente'
-            if item.get('eh_pagamento_fatura'):
-                acao = 'ignorar'  # pagamento da fatura já sai no extrato da conta
+            if item.get('eh_pagamento_fatura') or item.get('eh_saldo_anterior'):
+                # pagamento já sai no extrato da conta; "saldo em atraso" é a fatura anterior repetida
+                acao = 'ignorar'
         db.session.add(ItemConciliacao(
             conciliacao_id=conciliacao.id, data=item['data'], descricao=item['descricao'],
             valor=item['valor'], tipo=item['tipo'], numero_documento=item.get('numero_documento'),
@@ -245,9 +257,14 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
     sugestor = SugestorCategoria(user_id, historico=0)
     hoje = date.today()
 
+    def _eh_pagamento(item):
+        return bool(cartao) and item.tipo == 'receita' and eh_pagamento_fatura(item.descricao)
+
+    # compras/estornos primeiro, pagamentos de fatura por último (as faturas já existem)
+    itens = sorted(conciliacao.itens, key=lambda i: (_eh_pagamento(i), i.data, i.id))
     try:
         conciliadas = importadas = 0
-        for item in conciliacao.itens:
+        for item in itens:
             if item.status not in ('pendente', 'duplicado'):
                 continue
             decisao = decisoes.get(item.id, {})
@@ -256,6 +273,13 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                 acao = 'ignorar'
             if item.status == 'duplicado' and not decisao.get('acao'):
                 acao = 'ignorar'  # duplicado só entra se o usuário pedir explicitamente
+
+            if acao == 'ignorar' and item.status == 'pendente' and _eh_pagamento(item):
+                # Pagamento da fatura: a saída já vem no extrato da conta; aqui só
+                # libera o limite e dá baixa nas faturas em aberto (mais antigas primeiro).
+                _baixar_faturas(cartao, item.valor, item.data)
+                item.status = 'pagamento'
+                continue
 
             if acao == 'conciliar':
                 alvo_id = decisao.get('transacao_id') or item.transacao_id
@@ -318,7 +342,8 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                 importadas += 1
                 continue
 
-            item.status = 'ignorado'
+            if item.status != 'duplicado':
+                item.status = 'ignorado'
 
         conciliacao.linhas_conciliadas = conciliadas
         conciliacao.linhas_importadas = importadas
@@ -330,12 +355,52 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
     return resumo(conciliacao)
 
 
+def _baixar_faturas(cartao, valor, data_pagamento):
+    from datetime import timedelta
+    cartao.limite_utilizado = max(Decimal('0'), (cartao.limite_utilizado or 0) - valor)
+    restante = Decimal(valor)
+    abertas = (Fatura.query.filter(Fatura.cartao_id == cartao.id, Fatura.status != 'paga',
+                                   Fatura.data_vencimento <= data_pagamento + timedelta(days=10))
+               .order_by(Fatura.ano_referencia, Fatura.mes_referencia).all())
+    for fatura in abertas:
+        if restante <= 0:
+            break
+        devido = Decimal(fatura.valor_total or 0) - Decimal(fatura.valor_pago or 0)
+        if devido <= 0:
+            fatura.status = 'paga'
+            continue
+        pago = min(devido, restante)
+        fatura.valor_pago = Decimal(fatura.valor_pago or 0) + pago
+        restante -= pago
+        if fatura.valor_pago >= Decimal(fatura.valor_total or 0) - Decimal('0.01'):
+            fatura.status = 'paga'
+
+
+def _estornar_baixa(cartao, valor):
+    cartao.limite_utilizado = Decimal(cartao.limite_utilizado or 0) + valor
+    restante = Decimal(valor)
+    pagas = (Fatura.query.filter(Fatura.cartao_id == cartao.id, Fatura.valor_pago > 0)
+             .order_by(Fatura.ano_referencia.desc(), Fatura.mes_referencia.desc()).all())
+    for fatura in pagas:
+        if restante <= 0:
+            break
+        tirar = min(Decimal(fatura.valor_pago), restante)
+        fatura.valor_pago = Decimal(fatura.valor_pago) - tirar
+        restante -= tirar
+        if fatura.valor_pago < Decimal(fatura.valor_total or 0):
+            fatura.status = 'aberta'
+
+
 # ---------------------------------------------------------------- 3. desfazer
 
 def desfazer_conciliacao(conciliacao):
     """Remove as transações criadas por esta importação e devolve saldo/fatura. Faz commit."""
     removidas = 0
     try:
+        if conciliacao.cartao:
+            for item in conciliacao.itens:
+                if item.status == 'pagamento':
+                    _estornar_baixa(conciliacao.cartao, item.valor)
         criadas = Transacao.query.filter_by(conciliacao_origem_id=conciliacao.id).all()
         for t in criadas:
             if t.forma_pagamento == 'cartao_credito':

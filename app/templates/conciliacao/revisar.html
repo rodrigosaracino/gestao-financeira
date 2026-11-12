@@ -54,7 +54,7 @@
         <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Importados</div><h3 class="mb-0">{{ ps.get('importado', 0) }}</h3></div></div></div>
         <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Conciliados</div><h3 class="mb-0">{{ ps.get('conciliado', 0) }}</h3></div></div></div>
         <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Já importados antes</div><h3 class="mb-0">{{ ps.get('duplicado', 0) }}</h3></div></div></div>
-        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Ignorados</div><h3 class="mb-0">{{ ps.get('ignorado', 0) }}</h3></div></div></div>
+        <div class="col-6 col-md-3"><div class="card"><div class="card-body text-center"><div class="text-muted small">Ignorados / pagamentos</div><h3 class="mb-0">{{ ps.get('ignorado', 0) + ps.get('pagamento', 0) }}</h3></div></div></div>
         {% endif %}
     </div>
 
@@ -99,6 +99,8 @@
                                 <span class="badge bg-primary">Importado</span>
                             {% elif item.status == 'conciliado' %}
                                 <span class="badge bg-success">Conciliado</span>
+                            {% elif item.status == 'pagamento' %}
+                                <span class="badge bg-success">Pagamento de fatura (baixado)</span>
                             {% elif item.status == 'ignorado' %}
                                 <span class="badge bg-light text-dark">Ignorado</span>
                             {% elif item.transacao and item.acao_sugerida == 'conciliar' %}
