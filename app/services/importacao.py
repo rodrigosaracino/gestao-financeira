@@ -12,7 +12,7 @@ que os dois caminhos tenham exatamente a mesma regra:
 """
 import hashlib
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -223,12 +223,13 @@ def _ja_importadas(conta, cartao):
     else:
         q = q.filter(Transacao.conta_id == conta.id,
                      db.or_(Transacao.forma_pagamento.is_(None), Transacao.forma_pagamento != 'cartao_credito'))
-    ids, assinaturas = set(), Counter()
+    ids, assinaturas, parecidas = set(), Counter(), defaultdict(list)
     for id_ext, data_, valor, tipo, descricao in q.all():
         if id_ext.startswith('PROJ'):
             continue  # parcela prevista: será confirmada pela real, não é duplicata
         ids.add(id_ext)
         assinaturas[_assinatura(data_, valor, tipo, descricao)] += 1
+        parecidas[_chave_solta(data_, valor, tipo)].append(_palavras(descricao))
     if cartao:
         # pagamentos de fatura já baixados não viram transação: lembrar pelos itens
         pagos = (db.session.query(ItemConciliacao.id_externo)
@@ -236,7 +237,31 @@ def _ja_importadas(conta, cartao):
                  .filter(ConciliacaoBancaria.cartao_credito_id == cartao.id,
                          ItemConciliacao.status == 'pagamento', ItemConciliacao.id_externo.isnot(None)))
         ids.update(i for (i,) in pagos.all())
-    return ids, assinaturas
+    return ids, assinaturas, parecidas
+
+
+def _chave_solta(data_, valor, tipo):
+    return (data_, f'{Decimal(valor):.2f}', tipo)
+
+
+def _palavras(descricao):
+    return {p for p in normalizar_descricao(descricao).split() if len(p) >= 4}
+
+
+def _consumir_parecida(parecidas, item):
+    """
+    Mesmo lançamento vindo de outro formato (ex.: CSV antes, OFX agora): mesma data,
+    valor e tipo, e a descrição tem ao menos uma palavra em comum.
+    """
+    candidatas = parecidas.get(_chave_solta(item['data'], item['valor'], item['tipo']))
+    if not candidatas:
+        return False
+    palavras = _palavras(item['descricao'])
+    for i, outra in enumerate(candidatas):
+        if palavras & outra:
+            del candidatas[i]
+            return True
+    return False
 
 
 # ---------------------------------------------------------------- 1. analisar
@@ -273,7 +298,7 @@ def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=N
                       'os lançamentos repetidos foram marcados como "já importado".')
 
     # --- deduplicação contra importações anteriores
-    ids_existentes, assinaturas_existentes = _ja_importadas(conta, cartao)
+    ids_existentes, assinaturas_existentes, parecidas = _ja_importadas(conta, cartao)
     ocorrencias = Counter()
     novos, todos = [], []
     for item in resultado['transactions']:
@@ -285,6 +310,9 @@ def analisar_extrato(user_id, conteudo, nome_arquivo, conta_id=None, cartao_id=N
         if not duplicado and assinaturas_existentes[assin] > 0:
             assinaturas_existentes[assin] -= 1
             duplicado = True
+        # a mesma transação não pode servir de "duplicata" para duas linhas
+        achou_parecida = _consumir_parecida(parecidas, item)
+        duplicado = duplicado or achou_parecida
         item['duplicado'] = duplicado
         todos.append(item)
         if not duplicado:
