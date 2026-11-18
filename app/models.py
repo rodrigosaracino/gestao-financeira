@@ -68,6 +68,9 @@ class Categoria(db.Model):
     tipo = db.Column(db.String(20), nullable=False)  # receita, despesa
     cor = db.Column(db.String(7))  # código hexadecimal da cor
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # normal | transferencia (entre as próprias contas) | pagamento_cartao (paga fatura)
+    # As duas últimas movem saldo, mas não são receita nem despesa nos relatórios.
+    natureza = db.Column(db.String(20), nullable=False, default='normal', server_default='normal')
 
     transacoes = db.relationship('Transacao', backref='categoria', lazy=True)
 
