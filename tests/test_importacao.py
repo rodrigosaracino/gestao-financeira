@@ -558,3 +558,42 @@ def test_ofx_depois_do_csv_nao_duplica(app, usuarios):
         assert r['por_status'].get('duplicado') == 2
         assert r['por_status'].get('importado') == 2
         assert Transacao.query.filter_by(conta_id=a['conta']).count() == 4
+
+
+def test_compra_repetida_meses_depois_e_outra_serie(app, usuarios):
+    """Mesma loja e mesmo nº de parcelas, comprada de novo: projeta a série nova."""
+    from app.models import Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        for fid, d, n in (('R1', '20260101', 3), ('R2', '20260201', 4)):
+            antiga = _ofx_cartao([(d, '50.00', fid, f'Loja Y - Parcela {n}/4')])
+            importacao.aplicar_conciliacao(importacao.analisar_extrato(a['user'], antiga, f'{fid}.ofx',
+                                                                       cartao_id=a['cartao'])[0])
+        nova = _ofx_cartao([('20261001', '50.00', 'R3', 'Loja Y - Parcela 2/4')])
+        importacao.aplicar_conciliacao(importacao.analisar_extrato(a['user'], nova, 'b.ofx', cartao_id=a['cartao'])[0])
+        futuras = Transacao.query.filter(Transacao.cartao_credito_id == a['cartao'],
+                                         Transacao.id_externo.like('PROJ%')).order_by(Transacao.data).all()
+        assert [(t.numero_parcela, t.data.month) for t in futuras] == [(3, 11), (4, 12)]
+
+
+def test_fatura_valor_pendente_e_encargos(app, usuarios):
+    from app.models import db, Categoria, Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        db.session.add(Categoria(nome='Impostos e Taxas', tipo='despesa', cor='#000000', user_id=a['user']))
+        db.session.commit()
+        # histórico com 'Pagamento de fatura' (categoria especial) na conta
+        conta = (b'OFXHEADER:100\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKACCTFROM><ACCTID>c1</BANKACCTFROM>'
+                 b'<BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261016<TRNAMT>-10.00<FITID>C1'
+                 b'<MEMO>Pagamento de fatura</STMTTRN></BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>')
+        importacao.aplicar_conciliacao(importacao.analisar_extrato(a['user'], conta, 'c.ofx', conta_id=a['conta'])[0])
+        fatura = _ofx_cartao([('20261109', '10.00', 'F1', 'Valor pendente do mês anterior'),
+                              ('20261116', '6.00', 'F2', 'Juros por fatura atrasada'),
+                              ('20261116', '3.00', 'F3', 'Multa por fatura atrasada')])
+        conc, _ = importacao.analisar_extrato(a['user'], fatura, 'f.ofx', cartao_id=a['cartao'])
+        assert {i.descricao: i.acao_sugerida for i in conc.itens}['Valor pendente do mês anterior'] == 'ignorar'
+        importacao.aplicar_conciliacao(conc)
+        cats = {t.descricao: t.categoria.nome for t in Transacao.query.filter_by(cartao_credito_id=a['cartao'])}
+        assert cats == {'Juros por fatura atrasada': 'Impostos e Taxas', 'Multa por fatura atrasada': 'Impostos e Taxas'}

@@ -164,7 +164,9 @@ class SugestorCategoria:
         if chave and chave in memoria:
             return self._por_id[memoria[chave]]
         if chave and memoria:
-            melhor = process.extractOne(chave, memoria.keys(), scorer=fuzz.token_set_ratio, score_cutoff=85)
+            # parecido não basta para categoria especial ('FATURA' contido em 'JUROS POR FATURA ATRASADA')
+            comuns = [k for k, cid in memoria.items() if self._por_id[cid].natureza in (None, 'normal')]
+            melhor = process.extractOne(chave, comuns, scorer=fuzz.token_set_ratio, score_cutoff=85)
             if melhor:
                 return self._por_id[memoria[melhor[0]]]
         texto = ' ' + chave + ' ' + (descricao or '').upper() + ' '
