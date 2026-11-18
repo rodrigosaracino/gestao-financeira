@@ -524,3 +524,37 @@ Fechamento da fatura 08/11/2026
         assert db.session.get(CartaoCredito, a['cartao']).limite_utilizado == Decimal('6200.07')
         dez = Fatura.query.filter_by(cartao_id=a['cartao'], mes_referencia=12, ano_referencia=2026).one()
         assert dez.valor_total == Decimal('440.74')  # parcelas 3/4 e 3/15
+
+
+def _ofx_conta_inter(itens):
+    linhas = ''.join(
+        f'<STMTTRN><TRNTYPE>{"CREDIT" if v > 0 else "PAYMENT"}</TRNTYPE><DTPOSTED>{d}</DTPOSTED>'
+        f'<TRNAMT>{v:.2f}</TRNAMT><FITID>{fid}</FITID><MEMO>{memo}</MEMO></STMTTRN>\n'
+        for d, v, fid, memo in itens)
+    return ('OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>'
+            '<CURDEF>BRL</CURDEF><BANKACCTFROM><BANKID>077</BANKID><ACCTID>999</ACCTID>'
+            '<ACCTTYPE>CHECKING</ACCTTYPE></BANKACCTFROM><BANKTRANLIST>\n' + linhas +
+            '</BANKTRANLIST><LEDGERBAL><BALAMT>1100.00</BALAMT><DTASOF>20261104</DTASOF></LEDGERBAL>'
+            '</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>').encode('utf-8')
+
+
+def test_ofx_depois_do_csv_nao_duplica(app, usuarios):
+    """O mesmo lançamento chega em CSV e depois em OFX, com descrições diferentes."""
+    from app.models import Transacao
+    from app.services import importacao
+    a, _ = usuarios
+    with app.app_context():
+        conc, _ = importacao.analisar_extrato(a['user'], INTER_CSV.encode('utf-8'), 'Extrato.csv',
+                                              conta_id=a['conta'])
+        importacao.aplicar_conciliacao(conc)
+        ofx = _ofx_conta_inter([
+            ('20261103', 200, 'A1', 'Pix recebido: "Cp :123-FULANO DE TAL"'),
+            ('20261102', -50, 'A2', 'Pix enviado: "Cp :456-Maria Exemplo Silva"'),
+            ('20261102', -50, 'A3', 'Pix enviado: "Cp :789-Outra Pessoa"'),  # mesmo dia/valor, outra pessoa
+            ('20261104', -30, 'A4', 'Pix enviado: "Cp :111-Padaria"'),
+        ])
+        conc2, _ = importacao.analisar_extrato(a['user'], ofx, 'Extrato.ofx', conta_id=a['conta'])
+        r = importacao.aplicar_conciliacao(conc2)
+        assert r['por_status'].get('duplicado') == 2
+        assert r['por_status'].get('importado') == 2
+        assert Transacao.query.filter_by(conta_id=a['conta']).count() == 4
