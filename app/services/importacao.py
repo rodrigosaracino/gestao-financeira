@@ -62,8 +62,11 @@ def projetar_parcelas(transacao, cartao, conciliacao_id=None):
     base = _base_parcela(transacao.descricao)
     base_norm = normalizar_descricao(base)
     do_cartao = Transacao.query.filter_by(cartao_credito_id=cartao.id, total_parcelas=total).all()
+    # só a mesma compra: uma compra igual repetida meses depois é outra série de parcelas
     ja_existem = {t.numero_parcela for t in do_cartao
-                  if normalizar_descricao(_base_parcela(t.descricao)) == base_norm}
+                  if normalizar_descricao(_base_parcela(t.descricao)) == base_norm
+                  and t.data >= transacao.data - relativedelta(months=transacao.numero_parcela - t.numero_parcela)
+                  - relativedelta(days=20)}
     # nunca prever parcela num mês que já tem fatura real importada
     ultima_real = db.session.query(db.func.max(Transacao.data)).filter(
         Transacao.cartao_credito_id == cartao.id,
@@ -131,7 +134,7 @@ def projetar_historico(cartao):
     ultimas = {}
     for t in (Transacao.query.filter(Transacao.cartao_credito_id == cartao.id, Transacao.total_parcelas.isnot(None),
                                      Transacao.numero_parcela.isnot(None), Transacao.tipo == 'despesa')
-              .order_by(Transacao.numero_parcela).all()):
+              .order_by(Transacao.data, Transacao.numero_parcela).all()):
         ultimas[(normalizar_descricao(_base_parcela(t.descricao)), t.total_parcelas)] = t
     criadas = sum(projetar_parcelas(t, cartao) for t in ultimas.values())
     return criadas

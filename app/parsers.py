@@ -108,7 +108,7 @@ def eh_pagamento_fatura(descricao):
 
 # Fatura de cartão: saldo da fatura anterior repetido como débito (não é compra nova)
 _SALDO_ANTERIOR = re.compile(r'^\s*(SALDO EM ATRASO|SALDO ANTERIOR|SALDO DA FATURA ANTERIOR|'
-                             r'SALDO RESTANTE DA FATURA ANTERIOR|FATURA ANTERIOR)\b', re.I)
+                             r'SALDO RESTANTE DA FATURA ANTERIOR|FATURA ANTERIOR|VALOR PENDENTE DO MES ANTERIOR)\b', re.I)
 
 
 def eh_saldo_anterior(descricao):
