@@ -18,6 +18,7 @@
                     <th>Nome</th>
                     <th>Tipo</th>
                     <th>Cor</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -35,11 +36,18 @@
                         <span class="badge" style="background-color: {{ categoria.cor }};">
                             {{ categoria.cor }}
                         </span>
+                        {% if categoria.natureza == 'transferencia' %}<span class="badge bg-secondary">Transferência</span>
+                        {% elif categoria.natureza == 'pagamento_cartao' %}<span class="badge bg-secondary">Pagamento de fatura</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{{ url_for('main.editar_categoria', id=categoria.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="3" class="text-center text-muted">
+                    <td colspan="4" class="text-center text-muted">
                         Nenhuma categoria cadastrada.
                     </td>
                 </tr>

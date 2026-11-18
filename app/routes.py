@@ -6,7 +6,8 @@ from decimal import Decimal
 from sqlalchemy import func, extract
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
-from app.services import importacao
+from app.services import importacao, fluxo
+from app.services.fluxo import filtro_resultado
 from calendar import monthrange
 from collections import defaultdict
 import calendar
@@ -42,6 +43,10 @@ COR_RE = __import__('re').compile(r'^#[0-9a-fA-F]{6}$')
 def _cor_valida(cor, padrao='#3498db'):
     """Aceita apenas cores hexadecimais (#rrggbb) - impede injeção via style=."""
     return cor if cor and COR_RE.match(cor) else padrao
+
+
+def _natureza_valida(natureza):
+    return natureza if natureza in ('normal', 'transferencia', 'pagamento_cartao') else 'normal'
 
 
 def _erro_interno(mensagem_usuario, exc):
@@ -83,11 +88,25 @@ def index():
         Fatura.status.in_(['aberta', 'fechada'])
     ).all()
 
-    # Organizar transações por dia
-    transacoes_por_dia = defaultdict(lambda: {'receitas': Decimal('0.00'), 'despesas': Decimal('0.00')})
-
+    # Organizar transações por dia (visão de caixa):
+    # - compras no cartão não saem do caixa na data (saem no vencimento da fatura)
+    # - transferências entre as próprias contas e pagamento de fatura movem saldo,
+    #   mas não entram nos totais de receitas/despesas
+    especiais = fluxo.ids_fora_do_resultado(current_user.id)
+    transacoes_por_dia = defaultdict(lambda: {'receitas': Decimal('0.00'), 'despesas': Decimal('0.00'),
+                                              'liquido': Decimal('0.00')})
+    realizado_no_mes = Decimal('0.00')
     for transacao in transacoes_mes:
+        if transacao.forma_pagamento == 'cartao_credito':
+            continue
         dia_key = transacao.data
+        sinal = 1 if transacao.tipo == 'receita' else -1
+        transacoes_por_dia[dia_key]['liquido'] += sinal * transacao.valor
+        if transacao.pago and transacao.data <= hoje:
+            realizado_no_mes += sinal * transacao.valor
+        natureza = especiais.get(transacao.categoria_id, 'normal')
+        if natureza == 'transferencia':
+            continue
         if transacao.tipo == 'receita':
             transacoes_por_dia[dia_key]['receitas'] += transacao.valor
         else:
@@ -99,10 +118,12 @@ def index():
         valor_pendente = fatura.valor_total - fatura.valor_pago
         if valor_pendente > 0:
             transacoes_por_dia[dia_key]['despesas'] += valor_pendente
+            transacoes_por_dia[dia_key]['liquido'] -= valor_pendente
 
-    # Calcular projeção dia a dia do saldo
+    # Calcular projeção dia a dia do saldo, partindo do saldo do início do mês
+    # (o saldo de hoje já contém o que foi realizado no mês)
     projecao_fluxo = []
-    saldo_acumulado = float(saldo_total)
+    saldo_acumulado = float(saldo_total - realizado_no_mes)
 
     # Gerar dados para cada dia do mês
     dia_atual = primeiro_dia
@@ -113,7 +134,7 @@ def index():
         if dia_atual in transacoes_por_dia:
             receitas_dia = float(transacoes_por_dia[dia_atual]['receitas'])
             despesas_dia = float(transacoes_por_dia[dia_atual]['despesas'])
-            saldo_acumulado += receitas_dia - despesas_dia
+            saldo_acumulado += float(transacoes_por_dia[dia_atual]['liquido'])
 
         projecao_fluxo.append({
             'data': dia_atual.strftime('%Y-%m-%d'),
@@ -130,16 +151,17 @@ def index():
     # Calcular totais do mês
     total_receitas_mes = sum(float(d['receitas']) for d in transacoes_por_dia.values())
     total_despesas_mes = sum(float(d['despesas']) for d in transacoes_por_dia.values())
-    saldo_previsto_fim_mes = float(saldo_total) + total_receitas_mes - total_despesas_mes
+    saldo_previsto_fim_mes = projecao_fluxo[-1]['saldo'] if projecao_fluxo else float(saldo_total)
 
     # Separar receitas e despesas realizadas vs futuras
     receitas_realizadas = sum(
         float(t.valor) for t in transacoes_mes
-        if t.tipo == 'receita' and t.data <= hoje
+        if t.tipo == 'receita' and t.data <= hoje and t.categoria_id not in especiais
     )
+    # gastos do mês: inclui compras no cartão; sem transferências nem pagamento de fatura
     despesas_realizadas = sum(
         float(t.valor) for t in transacoes_mes
-        if t.tipo == 'despesa' and t.data <= hoje
+        if t.tipo == 'despesa' and t.data <= hoje and t.categoria_id not in especiais
     )
 
     # Próximos pagamentos (despesas futuras + faturas)
@@ -1038,6 +1060,7 @@ def nova_categoria():
             nome=request.form['nome'][:100],
             tipo=_tipo_valido(request.form.get('tipo')),
             cor=_cor_valida(request.form.get('cor')),
+            natureza=_natureza_valida(request.form.get('natureza')),
             user_id=current_user.id
         )
         db.session.add(categoria)
@@ -1045,7 +1068,23 @@ def nova_categoria():
         flash('Categoria criada com sucesso!', 'success')
         return redirect(url_for('main.listar_categorias'))
 
-    return render_template('categorias/form.html')
+    return render_template('categorias/form.html', categoria=None)
+
+
+@bp.route('/categorias/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_categoria(id):
+    """Editar categoria (nome, tipo, cor e natureza)"""
+    categoria = get_owned_or_404(Categoria, id)
+    if request.method == 'POST':
+        categoria.nome = request.form['nome'][:100]
+        categoria.tipo = _tipo_valido(request.form.get('tipo'))
+        categoria.cor = _cor_valida(request.form.get('cor'), categoria.cor)
+        categoria.natureza = _natureza_valida(request.form.get('natureza'))
+        db.session.commit()
+        flash('Categoria atualizada!', 'success')
+        return redirect(url_for('main.listar_categorias'))
+    return render_template('categorias/form.html', categoria=categoria)
 
 
 @bp.route('/api/categorias', methods=['POST'])
@@ -1249,7 +1288,8 @@ def pagar_fatura(id):
         # Obter ou criar categoria para pagamento de fatura do usuário logado
         categoria_fatura = Categoria.query.filter_by(nome='Pagamento de Fatura', user_id=current_user.id).first()
         if not categoria_fatura:
-            categoria_fatura = Categoria(nome='Pagamento de Fatura', tipo='despesa', cor='#ff3b57', user_id=current_user.id)
+            categoria_fatura = Categoria(nome='Pagamento de Fatura', tipo='despesa', cor='#ff3b57',
+                                         user_id=current_user.id, natureza='pagamento_cartao')
             db.session.add(categoria_fatura)
             db.session.flush()
 
@@ -1281,6 +1321,16 @@ def relatorios():
     return render_template('relatorios/index.html')
 
 
+@bp.route('/api/caixa-longo-prazo')
+@login_required
+def api_caixa_longo_prazo():
+    """API: caixa mês a mês - histórico real e projeção (com ou sem estimativa pela média)"""
+    passados = _int_limitado(request.args.get('passados', 12), 0, 36, 12)
+    futuros = _int_limitado(request.args.get('futuros', 12), 1, 36, 12)
+    estimar = request.args.get('estimar', '1') == '1'
+    return jsonify(fluxo.caixa_mensal(current_user.id, passados, futuros, estimar))
+
+
 @bp.route('/api/gastos-por-categoria')
 @login_required
 def api_gastos_por_categoria():
@@ -1294,6 +1344,7 @@ def api_gastos_por_categoria():
     ).join(Transacao).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'despesa',
+        filtro_resultado(),
         extract('month', Transacao.data) == mes,
         extract('year', Transacao.data) == ano
     ).group_by(Categoria.nome).all()
@@ -1316,6 +1367,7 @@ def api_fluxo_caixa():
     ).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'receita',
+        filtro_resultado(),
         extract('year', Transacao.data) == ano
     ).group_by('mes').all()
 
@@ -1325,6 +1377,7 @@ def api_fluxo_caixa():
     ).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'despesa',
+        filtro_resultado(),
         extract('year', Transacao.data) == ano
     ).group_by('mes').all()
 
@@ -1564,6 +1617,7 @@ def api_comparacao_periodos():
         total_receitas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
             Conta.user_id == current_user.id,
             Transacao.tipo == 'receita',
+            filtro_resultado(),
             Transacao.data >= inicio_periodo,
             Transacao.data <= fim_periodo
         ).scalar() or 0
@@ -1572,6 +1626,7 @@ def api_comparacao_periodos():
         total_despesas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
             Conta.user_id == current_user.id,
             Transacao.tipo == 'despesa',
+            filtro_resultado(),
             Transacao.data >= inicio_periodo,
             Transacao.data <= fim_periodo
         ).scalar() or 0
@@ -1605,6 +1660,7 @@ def api_top_categorias():
     ).join(Transacao).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'despesa',
+        filtro_resultado(),
         extract('month', Transacao.data) == mes,
         extract('year', Transacao.data) == ano
     ).group_by(Categoria.nome, Categoria.cor).order_by(func.sum(Transacao.valor).desc()).limit(limite).all()

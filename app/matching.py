@@ -143,7 +143,8 @@ class SugestorCategoria:
             if existente:
                 return existente if existente.tipo == tipo else None
         if not cat:
-            cat = Categoria(nome=nome, tipo=tipo, cor=cor, user_id=self.user_id)
+            cat = Categoria(nome=nome, tipo=tipo, cor=cor, user_id=self.user_id,
+                            natureza='pagamento_cartao' if chave_tipo == 'fatura' else 'transferencia')
             db.session.add(cat)
             db.session.flush()
             self.categorias.append(cat)

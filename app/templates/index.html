@@ -65,6 +65,38 @@
     </div>
 </div>
 
+<!-- Caixa no longo prazo -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Caixa: 12 meses atrás e 12 à frente</h5>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de projeção">
+                    <input type="radio" class="btn-check" name="caixaModo" id="caixaEstimar" value="1" checked>
+                    <label class="btn btn-outline-primary" for="caixaEstimar" title="Usa a média dos últimos 3 meses para o que ainda não está lançado (ex.: salário, gastos do dia a dia)">Com estimativa</label>
+                    <input type="radio" class="btn-check" name="caixaModo" id="caixaLancado" value="0">
+                    <label class="btn btn-outline-primary" for="caixaLancado" title="Só o que já está lançado: parcelas, faturas e lançamentos futuros">Só o lançado</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 mb-3 text-center" id="caixaResumo">
+                    <div class="col-6 col-md"><div class="small text-muted">Saldo hoje</div><div class="fs-5 fw-semibold" data-k="saldo_hoje">–</div></div>
+                    <div class="col-6 col-md"><div class="small text-muted">Em 6 meses</div><div class="fs-5 fw-semibold" data-k="saldo_6_meses">–</div></div>
+                    <div class="col-6 col-md"><div class="small text-muted">Em 12 meses</div><div class="fs-5 fw-semibold" data-k="saldo_12_meses">–</div></div>
+                    <div class="col-6 col-md"><div class="small text-muted">Menor saldo previsto</div><div class="fs-5 fw-semibold" data-k="menor_saldo">–</div><div class="small text-muted" data-k="menor_saldo_mes"></div></div>
+                    <div class="col-12 col-md"><div class="small text-muted">Sobra média por mês</div><div class="fs-5 fw-semibold" data-k="sobra_media">–</div><div class="small text-muted">últimos 3 meses</div></div>
+                </div>
+                <div id="caixaLongoChart" style="width: 100%; height: 520px;"></div>
+                <p class="small text-muted mb-0 mt-2">
+                    <strong>Como ler:</strong> linha = saldo somado das contas no fim de cada mês (contínua = real, tracejada = projeção).
+                    Barras = entradas e saídas de caixa do mês; o cartão conta no mês em que a fatura vence.
+                    Transferências entre suas contas não entram como receita nem despesa.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Cash Flow Chart -->
 <div class="row mb-4">
     <div class="col-12">
@@ -583,6 +615,77 @@ document.addEventListener('DOMContentLoaded', function() {
 // Aguardar carregamento completo da página e do Plotly
 document.addEventListener('DOMContentLoaded', function() {
     // Preparar dados para o gráfico
+    // ---------- Caixa no longo prazo ----------
+    (function () {
+        var brl = function (v) {
+            if (v === null || v === undefined) return '–';
+            return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+        };
+        function desenhar(dados) {
+            var m = dados.meses, r = dados.resumo;
+            document.querySelectorAll('#caixaResumo [data-k]').forEach(function (el) {
+                var k = el.getAttribute('data-k'), v = r[k];
+                el.textContent = (k === 'menor_saldo_mes') ? (v || '') : brl(v);
+                el.classList.toggle('text-danger', typeof v === 'number' && v < 0);
+            });
+            var x = m.map(function (i) { return i.rotulo; });
+            var iHoje = m.findIndex(function (i) { return i.tipo === 'atual'; });
+            var real = m.map(function (i, k) { return k <= iHoje ? i.saldo : null; });
+            var proj = m.map(function (i, k) { return k >= iHoje ? i.saldo : null; });
+            var texto = m.map(function (i) {
+                return '<b>' + i.rotulo + '</b>' + (i.tipo === 'real' ? ' (real)' : (i.estimado ? ' (projeção c/ estimativa)' : ' (projeção)')) +
+                    '<br>Entradas: ' + brl(i.entradas) + '<br>Saídas contas: ' + brl(i.saidas_contas) +
+                    '<br>Faturas de cartão: ' + brl(i.saidas_cartoes) + '<br>Resultado: ' + brl(i.resultado) +
+                    '<br><b>Saldo fim do mês: ' + brl(i.saldo) + '</b>';
+            });
+            var cor = getComputedStyle(document.body).color || '#0f1419';
+            var traces = [
+                { x: x, y: real, name: 'Saldo (real)', type: 'scatter', mode: 'lines+markers', line: { color: '#1d9bf0', width: 3 },
+                  hovertext: texto, hoverinfo: 'text', yaxis: 'y' },
+                { x: x, y: proj, name: 'Saldo (projeção)', type: 'scatter', mode: 'lines+markers',
+                  line: { color: '#1d9bf0', width: 3, dash: 'dash' }, marker: { symbol: 'circle-open' },
+                  hovertext: texto, hoverinfo: 'text', yaxis: 'y' },
+                { x: x, y: m.map(function (i) { return i.entradas; }), name: 'Entradas', type: 'bar',
+                  marker: { color: '#00ba7c' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' },
+                { x: x, y: m.map(function (i) { return -i.saidas_contas; }), name: 'Saídas das contas', type: 'bar',
+                  marker: { color: '#f4212e' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' },
+                { x: x, y: m.map(function (i) { return -i.saidas_cartoes; }), name: 'Faturas de cartão', type: 'bar',
+                  marker: { color: '#ff7a00' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' }
+            ];
+            var shapes = [{ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0, line: { color: '#f4212e', width: 1, dash: 'dot' } }];
+            if (iHoje >= 0) {
+                shapes.push({ type: 'rect', xref: 'x', x0: iHoje - 0.5, x1: m.length - 0.5, yref: 'paper', y0: 0, y1: 1,
+                              fillcolor: 'rgba(29,155,240,0.06)', line: { width: 0 }, layer: 'below' });
+            }
+            var layout = {
+                font: { family: 'Inter, sans-serif', size: 12, color: cor },
+                barmode: 'relative', bargap: 0.25, hovermode: 'x unified',
+                margin: { l: 70, r: 20, t: 10, b: 40 },
+                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+                legend: { orientation: 'h', y: -0.12 },
+                xaxis: { tickangle: -45, anchor: 'y2' },
+                yaxis: { domain: [0.45, 1], title: 'Saldo', tickformat: ',.0f', gridcolor: 'rgba(128,128,128,0.15)', zeroline: false },
+                yaxis2: { domain: [0, 0.38], title: 'Entradas / saídas', tickformat: ',.0f', gridcolor: 'rgba(128,128,128,0.15)',
+                          zerolinecolor: 'rgba(128,128,128,0.5)' },
+                shapes: shapes,
+                annotations: iHoje >= 0 ? [{ x: x[iHoje], y: 1, yref: 'paper', text: 'hoje', showarrow: false, yanchor: 'bottom', font: { size: 11 } }] : [],
+                separators: ',.'
+            };
+            Plotly.newPlot('caixaLongoChart', traces, layout, { responsive: true, displayModeBar: false, locale: 'pt-BR' });
+        }
+        function carregar() {
+            var estimar = document.querySelector('input[name="caixaModo"]:checked').value;
+            fetch('/api/caixa-longo-prazo?estimar=' + estimar)
+                .then(function (r) { return r.json(); })
+                .then(desenhar)
+                .catch(function () {
+                    document.getElementById('caixaLongoChart').textContent = 'Não foi possível carregar a projeção.';
+                });
+        }
+        document.querySelectorAll('input[name="caixaModo"]').forEach(function (el) { el.addEventListener('change', carregar); });
+        if (window.Plotly) { carregar(); } else { window.addEventListener('load', carregar); }
+    })();
+
     var projecaoData = {{ projecao_fluxo | tojson }};
 
     console.log('Dados de projeção:', projecaoData); // Debug
