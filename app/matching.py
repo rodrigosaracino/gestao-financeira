@@ -45,8 +45,13 @@ def calcular_score_matching(item_extrato, transacao):
     dias = abs((item_extrato['data'] - transacao.data).days)
     score += {0: 30, 1: 25, 2: 20, 3: 20}.get(dias, 10 if dias <= JANELA_DIAS else 0)
 
-    score += fuzz.token_set_ratio(normalizar_descricao(item_extrato['descricao']),
-                                  normalizar_descricao(transacao.descricao)) / 100 * 20
+    if (transacao.id_externo or '').startswith('TRF'):
+        # transferência lançada na tela ("Nubank → Inter") nunca se parece com o texto do
+        # banco ("Pix enviado - Fulano"): vale o valor e a data
+        score += 20
+    else:
+        score += fuzz.token_set_ratio(normalizar_descricao(item_extrato['descricao']),
+                                      normalizar_descricao(transacao.descricao)) / 100 * 20
     return int(min(score, 100))
 
 

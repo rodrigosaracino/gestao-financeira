@@ -105,3 +105,82 @@ def parcelas_seguintes(transacao):
         if mesma_raiz or mesma_compra:
             serie[t.id] = t
     return sorted(serie.values(), key=lambda t: (t.numero_parcela, t.data))
+
+
+# ---------------------------------------------------------------- transferências
+
+PREFIXO_TRANSFERENCIA = 'TRF'
+
+
+def categorias_transferencia(user_id):
+    """(enviada, recebida): categorias de transferência entre as próprias contas (cria se faltar)."""
+    from app.models import Categoria
+    pares = {}
+    for tipo, nome in (('despesa', 'Transferência enviada (minhas contas)'),
+                       ('receita', 'Transferência recebida (minhas contas)')):
+        cat = (Categoria.query.filter_by(user_id=user_id, tipo=tipo, natureza='transferencia').first()
+               or Categoria.query.filter_by(user_id=user_id, nome=nome).first())
+        if not cat:
+            cat = Categoria(nome=nome, tipo=tipo, cor='#7f8c8d', user_id=user_id, natureza='transferencia')
+            db.session.add(cat)
+            db.session.flush()
+        elif cat.natureza != 'transferencia':
+            cat.natureza = 'transferencia'
+        pares[tipo] = cat
+    return pares['despesa'], pares['receita']
+
+
+def eh_transferencia_manual(transacao):
+    return bool(transacao and (transacao.id_externo or '').startswith(PREFIXO_TRANSFERENCIA))
+
+
+def pernas_transferencia(transacao):
+    """As duas transações (saída, entrada) de uma transferência lançada na tela."""
+    if not eh_transferencia_manual(transacao):
+        return [transacao]
+    pernas = Transacao.query.filter(Transacao.id_externo == transacao.id_externo).all()
+    pernas = [p for p in pernas if p.conta and transacao.conta and p.conta.user_id == transacao.conta.user_id]
+    return sorted(pernas, key=lambda p: 0 if p.tipo == 'despesa' else 1)
+
+
+def salvar_transferencia(user_id, origem, destino, valor, data_transf, descricao, pago, existente=None):
+    """
+    Cria (ou atualiza) uma transferência: saída na conta de origem e entrada na de
+    destino, nas categorias de transferência (não contam como receita nem despesa).
+    """
+    import uuid
+    enviada, recebida = categorias_transferencia(user_id)
+    pago = bool(pago) and pode_ficar_pago(data_transf)
+    descricao = (descricao or '').strip() or f'Transferência {origem.nome} → {destino.nome}'
+    if existente:
+        pernas = pernas_transferencia(existente)
+        for p in pernas:   # desfaz o efeito antigo no saldo
+            if p.pago:
+                aplicar(p.conta, p.tipo, p.valor, sinal=-1)
+        saida = next((p for p in pernas if p.tipo == 'despesa'), None)
+        entrada = next((p for p in pernas if p.tipo == 'receita'), None)
+        chave = existente.id_externo
+    else:
+        saida = entrada = None
+        chave = PREFIXO_TRANSFERENCIA + uuid.uuid4().hex
+    if saida is None:
+        saida = Transacao(tipo='despesa', id_externo=chave)
+        db.session.add(saida)
+    if entrada is None:
+        entrada = Transacao(tipo='receita', id_externo=chave)
+        db.session.add(entrada)
+    for perna, conta, cat in ((saida, origem, enviada), (entrada, destino, recebida)):
+        perna.descricao = descricao[:200]
+        perna.valor = Decimal(valor)
+        perna.data = data_transf
+        perna.conta_id = conta.id
+        perna.conta = conta
+        perna.categoria_id = cat.id
+        perna.forma_pagamento = 'dinheiro'
+        perna.cartao_credito_id = None
+        perna.fatura_id = None
+        perna.pago = pago
+        if pago:
+            aplicar(conta, perna.tipo, perna.valor)
+    db.session.flush()
+    return saida, entrada
