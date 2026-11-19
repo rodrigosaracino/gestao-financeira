@@ -441,11 +441,16 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                     elif not alvo.id_externo:
                         alvo.id_externo = item.id_externo
                     if not alvo.pago and alvo.pode_marcar_pago():
-                        if alvo.data > hoje:
-                            alvo.data = item.data  # previsto para o futuro, mas o banco diz que já aconteceu
-                        if alvo.data <= hoje:
-                            alvo.pago = True  # o banco confirmou o lançamento
-                            _aplicar_saldo(alvo.conta, alvo.tipo, alvo.valor)
+                        from app.services.saldos import pernas_transferencia
+                        # transferência lançada na tela: as duas pontas aconteceram juntas
+                        for perna in pernas_transferencia(alvo):
+                            if perna.pago:
+                                continue
+                            if perna.data > hoje:
+                                perna.data = item.data  # previsto para o futuro, mas o banco diz que já aconteceu
+                            if perna.data <= hoje:
+                                perna.pago = True  # o banco confirmou o lançamento
+                                _aplicar_saldo(perna.conta, perna.tipo, perna.valor)
                     conciliadas += 1
                     continue
 

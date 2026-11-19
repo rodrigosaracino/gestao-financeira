@@ -11,9 +11,14 @@
             <p class="text-muted" style="margin: 0; font-size: 0.95rem;">Data Grid de alta produtividade</p>
         </div>
     </div>
-    <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Nova Transação Completa
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('main.nova_transferencia') }}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left-right"></i> Transferência entre contas
+        </a>
+        <a href="{{ url_for('main.nova_transacao') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nova Transação
+        </a>
+    </div>
 </div>
 
 <!-- Month Navigation Bar -->
@@ -48,7 +53,7 @@
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 208, 132, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Receitas</small>
                             <div class="financial-value positive" style="font-size: 1.25rem; margin-top: 0.25rem;">
-                                R$ {{ "%.2f"|format(total_receitas) }}
+                                {{ (total_receitas)|brl }}
                             </div>
                         </div>
                     </div>
@@ -56,7 +61,7 @@
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(255, 59, 87, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Despesas</small>
                             <div class="financial-value negative" style="font-size: 1.25rem; margin-top: 0.25rem;">
-                                R$ {{ "%.2f"|format(total_despesas) }}
+                                {{ (total_despesas)|brl }}
                             </div>
                         </div>
                     </div>
@@ -64,7 +69,7 @@
                         <div style="text-align: center; padding: var(--space-sm); background: rgba(0, 102, 255, 0.1); border-radius: var(--radius-md);">
                             <small class="text-muted" style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Saldo</small>
                             <div class="financial-value {% if saldo_mes >= 0 %}positive{% else %}negative{% endif %}" style="font-size: 1.25rem; margin-top: 0.25rem;">
-                                {% if saldo_mes >= 0 %}+{% endif %} R$ {{ "%.2f"|format(saldo_mes) }}
+                                {% if saldo_mes >= 0 %}+{% endif %} {{ (saldo_mes)|brl }}
                             </div>
                         </div>
                     </div>
@@ -72,7 +77,7 @@
                 {% if total_movimentacoes %}
                 <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
                     <i class="bi bi-arrow-left-right"></i>
-                    Fora dos totais: R$ {{ "%.2f"|format(total_movimentacoes) }} em transferências entre suas contas e pagamentos de fatura.
+                    Fora dos totais: {{ (total_movimentacoes)|brl }} em transferências entre suas contas e pagamentos de fatura.
                 </small>
                 {% endif %}
             </div>
@@ -224,7 +229,11 @@
                     </td>
                     <td>
                         <span style="font-size: 0.9rem; color: var(--color-text-secondary);">
-                            {{ transacao.categoria.nome }}
+                            {% if outro_lado.get(transacao.id) %}
+                                {{ 'para' if transacao.tipo == 'despesa' else 'vindo de' }} <strong>{{ outro_lado[transacao.id] }}</strong>
+                            {% else %}
+                                {{ transacao.categoria.nome }}
+                            {% endif %}
                         </span>
                     </td>
                     <td>
@@ -232,18 +241,27 @@
                             {{ transacao.conta.nome }}
                         </span>
                     </td>
+                    {% set e_transf = transacao.categoria.natureza == 'transferencia' %}
                     <td>
-                        {% if transacao.tipo == 'receita' %}
+                        {% if e_transf %}
+                            <span class="badge bg-secondary" title="Entre as suas contas: não conta como receita nem despesa">
+                                <i class="bi bi-arrow-left-right"></i> Transferência
+                            </span>
+                        {% elif transacao.tipo == 'receita' %}
                             <span class="badge bg-success">Receita</span>
                         {% else %}
                             <span class="badge bg-danger">Despesa</span>
                         {% endif %}
                     </td>
                     <td style="text-align: right;">
-                        {% if transacao.tipo == 'receita' %}
-                            <span class="financial-value positive">+ R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                        {% if e_transf %}
+                            <span class="financial-value" style="color: var(--color-text-secondary);">
+                                {{ '+' if transacao.tipo == 'receita' else '−' }} {{ transacao.valor|brl }}
+                            </span>
+                        {% elif transacao.tipo == 'receita' %}
+                            <span class="financial-value positive">+ {{ transacao.valor|brl }}</span>
                         {% else %}
-                            <span class="financial-value negative">- R$ {{ "%.2f"|format(transacao.valor) }}</span>
+                            <span class="financial-value negative">− {{ transacao.valor|brl }}</span>
                         {% endif %}
                     </td>
                     <td style="text-align: center;">
@@ -254,6 +272,7 @@
                             <button type="button" class="btn btn-sm btn-danger btn-excluir" title="Excluir"
                                     data-id="{{ transacao.id }}" data-descricao="{{ transacao.descricao }}"
                                     data-valor="{{ '%.2f'|format(transacao.valor) }}"
+                                    {% if (transacao.id_externo or '').startswith('TRF') %}data-transferencia="1"{% endif %}
                                     {% if transacao.forma_pagamento == 'cartao_credito' and transacao.numero_parcela and transacao.total_parcelas and transacao.total_parcelas > 1 %}
                                     data-parcela="{{ transacao.numero_parcela }}" data-total="{{ transacao.total_parcelas }}"
                                     {% endif %}
@@ -566,12 +585,16 @@ function confirmarDelecao(botao) {
     document.getElementById('excluirDescricao').textContent = d.descricao;
     document.getElementById('excluirValor').textContent = 'R$ ' + d.valor.replace('.', ',');
     const parcelada = !!d.parcela;
+    const transferencia = !!d.transferencia;
     document.getElementById('excluirPerguntaParcela').classList.toggle('d-none', !parcelada);
     document.getElementById('excluirPerguntaSimples').classList.toggle('d-none', parcelada);
     document.getElementById('btnExcluirProximas').classList.toggle('d-none', !parcelada);
     const ultima = parcelada && d.parcela === d.total;
     document.getElementById('btnExcluirProximas').classList.toggle('d-none', !parcelada || ultima);
-    document.getElementById('btnExcluirEsta').textContent = parcelada ? 'Só esta parcela' : 'Excluir';
+    document.getElementById('btnExcluirEsta').textContent = parcelada ? 'Só esta parcela' : (transferencia ? 'Excluir a transferência' : 'Excluir');
+    document.getElementById('excluirPerguntaSimples').textContent = transferencia
+        ? 'A saída e a entrada desta transferência serão excluídas, e o saldo das duas contas volta ao que era.'
+        : 'Tem certeza? Esta ação não pode ser desfeita.';
     if (parcelada) {
         document.getElementById('excluirParcela').textContent = d.parcela + '/' + d.total;
         document.getElementById('excluirFaixa').textContent = ultima

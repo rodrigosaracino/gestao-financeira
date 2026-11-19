@@ -475,6 +475,17 @@ def listar_transacoes():
 
     saldo_mes = total_receitas - total_despesas
 
+    # transferências lançadas na tela: mostrar a conta do outro lado ("para Poupança")
+    chaves = {t.id_externo for t in transacoes.items if saldos.eh_transferencia_manual(t)}
+    outro_lado = {}
+    if chaves:
+        pernas = Transacao.query.join(Conta).filter(Conta.user_id == current_user.id,
+                                                    Transacao.id_externo.in_(chaves)).all()
+        for t in pernas:
+            for o in pernas:
+                if o.id_externo == t.id_externo and o.id != t.id:
+                    outro_lado[t.id] = o.conta.nome
+
     # Dados para os filtros - apenas do usuário logado
     contas_filtro = Conta.query.filter_by(ativa=True, user_id=current_user.id).all()
     categorias_filtro = Categoria.query.filter_by(user_id=current_user.id).all()
@@ -504,6 +515,7 @@ def listar_transacoes():
                          total_despesas=total_despesas,
                          total_movimentacoes=total_movimentacoes,
                          saldo_mes=saldo_mes,
+                         outro_lado=outro_lado,
                          mes_sistema=datetime.now().month,
                          ano_sistema=datetime.now().year)
 
@@ -697,6 +709,8 @@ def editar_transacao(id):
         Transacao.id == id,
         Conta.user_id == current_user.id
     ).first_or_404()
+    if saldos.eh_transferencia_manual(transacao):
+        return redirect(url_for('main.editar_transferencia', id=transacao.id))
 
     if request.method == 'POST':
         # Validar posse de TODOS os ids vindos do formulário antes de alterar algo
@@ -777,7 +791,9 @@ def deletar_transacao(id):
     ).first_or_404()
 
     # "proximas": esta parcela e as seguintes da mesma compra no cartão
-    if request.form.get('escopo') == 'proximas':
+    if saldos.eh_transferencia_manual(transacao):
+        alvo = saldos.pernas_transferencia(transacao)   # transferência: as duas pontas juntas
+    elif request.form.get('escopo') == 'proximas':
         alvo = saldos.parcelas_seguintes(transacao)
     else:
         alvo = [transacao]
@@ -796,6 +812,9 @@ def deletar_transacao(id):
     for cartao_id in cartoes - {None}:
         saldos.recalcular_limite(cartao_id)
     db.session.commit()
+    if saldos.eh_transferencia_manual(transacao):
+        flash('Transferência excluída (saída e entrada).', 'success')
+        return redirect(url_for('main.listar_transacoes'))
     if len(alvo) > 1:
         flash(f'{len(alvo)} parcelas excluídas (da {alvo[0].numero_parcela}/{alvo[0].total_parcelas} '
               f'à {alvo[-1].numero_parcela}/{alvo[-1].total_parcelas}).', 'success')
@@ -814,32 +833,18 @@ def toggle_pago_transacao(id):
     if not transacao.pode_marcar_pago():
         return jsonify({'success': False, 'message': 'Transações de cartão de crédito não podem ser marcadas individualmente'}), 400
 
-    # Obter a conta
-    conta = Conta.query.get(transacao.conta_id)
-
-    # Se está marcando como pago agora
-    if not transacao.pago:
-        if not saldos.pode_ficar_pago(transacao.data):
-            return jsonify({'success': False,
-                            'message': 'Esta transação tem data futura. Marque como paga quando acontecer.'}), 400
-        # Atualizar saldo da conta
-        if transacao.tipo == 'receita':
-            conta.saldo_atual += transacao.valor
-        else:  # despesa
-            conta.saldo_atual -= transacao.valor
-
-        transacao.pago = True
-        status_text = 'pago' if transacao.tipo == 'despesa' else 'recebido'
-        message = f'Transação marcada como {status_text}!'
+    marcar = not transacao.pago
+    if marcar and not saldos.pode_ficar_pago(transacao.data):
+        return jsonify({'success': False,
+                        'message': 'Esta transação tem data futura. Marque como paga quando acontecer.'}), 400
+    # transferência: saída e entrada mudam juntas
+    for t in saldos.pernas_transferencia(transacao):
+        if t.pago != marcar:
+            saldos.aplicar(t.conta, t.tipo, t.valor, sinal=1 if marcar else -1)
+            t.pago = marcar
+    if marcar:
+        message = 'Transação marcada como ' + ('pago' if transacao.tipo == 'despesa' else 'recebido') + '!'
     else:
-        # Se está desmarcando como pago
-        # Reverter o efeito no saldo
-        if transacao.tipo == 'receita':
-            conta.saldo_atual -= transacao.valor
-        else:  # despesa
-            conta.saldo_atual += transacao.valor
-
-        transacao.pago = False
         message = 'Status de pagamento removido'
 
     db.session.commit()
@@ -906,6 +911,63 @@ def criar_transacao_inline():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': _erro_interno('Erro ao criar transação.', e)}), 500
+
+
+@bp.route('/transferencias/nova', methods=['GET', 'POST'])
+@login_required
+def nova_transferencia():
+    """Transferência entre as próprias contas: sai de uma, entra na outra; não é receita nem despesa."""
+    contas = Conta.query.filter_by(ativa=True, user_id=current_user.id).order_by(Conta.nome).all()
+    if request.method == 'POST':
+        return _salvar_transferencia_do_form(None)
+    return render_template('transacoes/transferencia.html', contas=contas, transferencia=None,
+                           data_hoje=date.today().strftime('%Y-%m-%d'))
+
+
+@bp.route('/transferencias/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_transferencia(id):
+    perna = get_owned_or_404(Transacao, id)
+    if not saldos.eh_transferencia_manual(perna):
+        abort(404)
+    if request.method == 'POST':
+        return _salvar_transferencia_do_form(perna)
+    pernas = saldos.pernas_transferencia(perna)
+    saida = next((p for p in pernas if p.tipo == 'despesa'), perna)
+    entrada = next((p for p in pernas if p.tipo == 'receita'), perna)
+    contas = Conta.query.filter_by(user_id=current_user.id).order_by(Conta.nome).all()
+    return render_template('transacoes/transferencia.html', contas=contas,
+                           transferencia={'id': perna.id, 'origem': saida.conta_id, 'destino': entrada.conta_id,
+                                          'valor': saida.valor, 'data': saida.data.strftime('%Y-%m-%d'),
+                                          'descricao': saida.descricao, 'pago': saida.pago},
+                           data_hoje=date.today().strftime('%Y-%m-%d'))
+
+
+def _salvar_transferencia_do_form(existente):
+    voltar = (url_for('main.editar_transferencia', id=existente.id) if existente
+              else url_for('main.nova_transferencia'))
+    origem = get_owned_or_404(Conta, request.form.get('conta_origem_id'))
+    destino = get_owned_or_404(Conta, request.form.get('conta_destino_id'))
+    if origem.id == destino.id:
+        flash('Escolha contas diferentes para origem e destino.', 'error')
+        return redirect(voltar)
+    valor = validate_decimal(request.form.get('valor'), min_value=Decimal('0.01'), max_value=VALOR_MAXIMO)
+    if valor is None:
+        flash('Valor inválido!', 'error')
+        return redirect(voltar)
+    try:
+        data_transf = datetime.strptime(request.form.get('data', ''), '%Y-%m-%d').date()
+    except ValueError:
+        flash('Data inválida!', 'error')
+        return redirect(voltar)
+    pago = 'pago' in request.form
+    if pago and not saldos.pode_ficar_pago(data_transf):
+        flash('Data futura: a transferência ficou agendada (pendente).', 'info')
+    saldos.salvar_transferencia(current_user.id, origem, destino, valor, data_transf,
+                                request.form.get('descricao', ''), pago, existente=existente)
+    db.session.commit()
+    flash('Transferência ' + ('atualizada' if existente else 'registrada') + f': {origem.nome} → {destino.nome}.', 'success')
+    return redirect(url_for('main.listar_transacoes', mes=data_transf.month, ano=data_transf.year))
 
 
 def obter_ou_criar_fatura(cartao, data_referencia):
