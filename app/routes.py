@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, extract
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
-from app.services import importacao, fluxo
+from app.services import importacao, fluxo, saldos
 from app.services.fluxo import filtro_resultado
 from calendar import monthrange
 from collections import defaultdict
@@ -85,7 +85,7 @@ def index():
         CartaoCredito.user_id == current_user.id,
         Fatura.data_vencimento >= primeiro_dia,
         Fatura.data_vencimento <= ultimo_dia,
-        Fatura.status.in_(['aberta', 'fechada'])
+        Fatura.status != 'paga'
     ).all()
 
     # Organizar transações por dia (visão de caixa):
@@ -183,7 +183,7 @@ def index():
 
     # Faturas pendentes (incluindo as com vencimento futuro e atual)
     faturas_pendentes = Fatura.query.filter(
-        Fatura.status.in_(['aberta', 'fechada']),
+        Fatura.status != 'paga',
         Fatura.data_vencimento >= hoje
     ).join(CartaoCredito).filter(
         CartaoCredito.user_id == current_user.id
@@ -225,9 +225,9 @@ def index():
     # Faturas pendentes (todas) do usuário logado
     faturas_abertas = Fatura.query.join(CartaoCredito).filter(
         CartaoCredito.user_id == current_user.id,
-        Fatura.status.in_(['aberta', 'fechada'])
+        Fatura.status != 'paga'
     ).all()
-    total_faturas = sum(fatura.valor_total for fatura in faturas_abertas)
+    total_faturas = sum(max(Decimal('0'), (f.valor_total or 0) - (f.valor_pago or 0)) for f in faturas_abertas)
 
     # LEMBRETES DE METAS - Metas ativas que precisam de aporte
     metas_ativas = Meta.query.filter_by(
@@ -531,7 +531,7 @@ def nova_transacao():
             total_parcelas = _int_limitado(request.form.get('total_parcelas', 1), 1, MAX_PARCELAS, 1)
             valor_total = Decimal(request.form['valor'])
             categoria = get_owned_or_404(Categoria, request.form.get('categoria_id'))
-            valor_parcela = valor_total / total_parcelas
+            parcelas = saldos.dividir_em_parcelas(valor_total, total_parcelas)
             data_compra = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
 
             cartao = CartaoCredito.query.filter_by(id=cartao_id, user_id=current_user.id).first()
@@ -574,6 +574,7 @@ def nova_transacao():
 
                 # Criar transação da parcela
                 descricao_parcela = f"{request.form['descricao']} ({i}/{total_parcelas})"
+                valor_parcela = parcelas[i - 1]
                 transacao_parcela = Transacao(
                     descricao=descricao_parcela,
                     valor=valor_parcela,
@@ -599,8 +600,8 @@ def nova_transacao():
                 # Atualizar valor da fatura
                 fatura.valor_total += valor_parcela
 
-            # Atualizar limite utilizado do cartão
-            cartao.limite_utilizado += valor_total
+            # Atualizar limite utilizado do cartão (o que falta pagar nas faturas)
+            saldos.recalcular_limite(cartao.id)
 
             db.session.commit()
             msg = f'Compra parcelada em {total_parcelas}x adicionada com sucesso!'
@@ -611,6 +612,10 @@ def nova_transacao():
             # Pagamento em dinheiro/débito
             recorrente = 'recorrente' in request.form
             pago = 'pago' in request.form
+            data_transacao = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
+            if pago and not saldos.pode_ficar_pago(data_transacao):
+                pago = False
+                flash('Data futura: a transação ficou como pendente. Marque como paga quando acontecer.', 'info')
             conta = get_owned_or_404(Conta, request.form.get('conta_id'))
             categoria = get_owned_or_404(Categoria, request.form.get('categoria_id'))
 
@@ -618,7 +623,7 @@ def nova_transacao():
                 descricao=request.form['descricao'],
                 valor=valor,
                 tipo=_tipo_valido(request.form.get('tipo')),
-                data=datetime.strptime(request.form['data'], '%Y-%m-%d').date(),
+                data=data_transacao,
                 forma_pagamento='dinheiro',
                 conta_id=conta.id,
                 categoria_id=categoria.id,
@@ -636,13 +641,9 @@ def nova_transacao():
                 transacao.data_inicio_recorrencia = data_inicio
                 transacao.quantidade_recorrencias = quantidade
 
-            # Atualizar saldo da conta apenas se a transação estiver marcada como paga
-            # e a data for hoje ou no passado
-            if pago and transacao.data <= date.today():
-                if transacao.tipo == 'receita':
-                    conta.saldo_atual += transacao.valor
-                else:
-                    conta.saldo_atual -= transacao.valor
+            # Atualizar saldo da conta (só fica paga se a data for hoje ou passada)
+            if pago:
+                saldos.aplicar(conta, transacao.tipo, transacao.valor)
 
             db.session.add(transacao)
             db.session.flush()  # Para obter o ID da transação
@@ -711,38 +712,46 @@ def editar_transacao(id):
             return redirect(url_for('main.editar_transacao', id=id))
         novo_tipo = _tipo_valido(request.form.get('tipo'))
 
-        # Reverter o efeito da transação anterior no saldo (só se estava paga)
-        if transacao.pago:
-            conta_anterior = transacao.conta
-            if transacao.tipo == 'receita':
-                conta_anterior.saldo_atual -= transacao.valor
-            else:
-                conta_anterior.saldo_atual += transacao.valor
+        nova_data = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
+        cartao_antigo_id = transacao.cartao_credito_id
+        fatura_antiga_id = transacao.fatura_id
+        mes_antigo = (transacao.data.year, transacao.data.month)
+
+        # Reverter o efeito anterior no saldo (só transação paga que não é de cartão)
+        if transacao.pago and transacao.forma_pagamento != 'cartao_credito':
+            saldos.aplicar(transacao.conta, transacao.tipo, transacao.valor, sinal=-1)
 
         # Atualizar os dados da transação
         transacao.descricao = request.form['descricao']
         transacao.valor = novo_valor
         transacao.tipo = novo_tipo
-        transacao.data = datetime.strptime(request.form['data'], '%Y-%m-%d').date()
+        transacao.data = nova_data
         transacao.categoria_id = categoria.id
         transacao.forma_pagamento = forma_pagamento
-
-        # Atualizar cartão de crédito (se aplicável)
-        if cartao is not None:
-            transacao.cartao_credito_id = cartao.id
-        else:
-            transacao.cartao_credito_id = None
-            # Atualizar status de pago (apenas para não-cartão)
-            transacao.pago = 'pago' in request.form
-
         transacao.conta_id = conta_nova.id
 
-        # Aplicar o novo efeito no saldo (só se paga)
-        if transacao.pago:
-            if transacao.tipo == 'receita':
-                conta_nova.saldo_atual += transacao.valor
-            else:
-                conta_nova.saldo_atual -= transacao.valor
+        if cartao is not None:
+            # compra no cartão: não mexe no saldo da conta; fica na fatura do mês
+            transacao.cartao_credito_id = cartao.id
+            transacao.pago = False
+            if (not transacao.fatura_id or cartao.id != cartao_antigo_id
+                    or (nova_data.year, nova_data.month) != mes_antigo):
+                transacao.fatura_id = obter_ou_criar_fatura(cartao, nova_data).id
+        else:
+            transacao.cartao_credito_id = None
+            transacao.fatura_id = None
+            transacao.pago = 'pago' in request.form
+            if transacao.pago and not saldos.pode_ficar_pago(nova_data):
+                transacao.pago = False
+                flash('Data futura: a transação ficou como pendente.', 'info')
+            if transacao.pago:
+                saldos.aplicar(conta_nova, transacao.tipo, transacao.valor)
+
+        # Faturas e limites envolvidos (antes e depois) recalculados a partir das transações
+        for fatura_id in {fatura_antiga_id, transacao.fatura_id} - {None}:
+            saldos.recalcular_fatura(fatura_id)
+        for cartao_id in {cartao_antigo_id, transacao.cartao_credito_id} - {None}:
+            saldos.recalcular_limite(cartao_id)
 
         db.session.commit()
         flash('Transação atualizada com sucesso!', 'success')
@@ -767,39 +776,15 @@ def deletar_transacao(id):
         Conta.user_id == current_user.id
     ).first_or_404()
 
-    # Reverter o efeito da transação no saldo (apenas se estava marcada como paga)
-    if transacao.pago:
-        conta = Conta.query.get(transacao.conta_id)
-        if transacao.tipo == 'receita':
-            conta.saldo_atual -= transacao.valor
-        else:
-            conta.saldo_atual += transacao.valor
+    # Reverter o efeito no saldo (só transação paga que não é de cartão)
+    if transacao.pago and transacao.forma_pagamento != 'cartao_credito':
+        saldos.aplicar(transacao.conta, transacao.tipo, transacao.valor, sinal=-1)
 
-    # Se for transação de cartão de crédito, atualizar fatura e limite
-    if transacao.forma_pagamento == 'cartao_credito':
-        # Atualizar valor da fatura
-        if transacao.fatura_id:
-            fatura = Fatura.query.get(transacao.fatura_id)
-            if fatura:
-                fatura.valor_total -= transacao.valor
-
-        # Atualizar limite utilizado do cartão (se for transação parcelada)
-        if transacao.cartao_credito_id and transacao.parcelado:
-            cartao = CartaoCredito.query.get(transacao.cartao_credito_id)
-            if cartao:
-                # Se for a primeira parcela ou transação pai, descontar o valor total
-                # Caso contrário, descontar apenas o valor da parcela
-                if transacao.numero_parcela == 1 or transacao.numero_parcela is None:
-                    # Calcular valor total do parcelamento
-                    valor_total_parcelamento = transacao.valor * transacao.total_parcelas
-                    cartao.limite_utilizado -= valor_total_parcelamento
-
-                    # Garantir que não fique negativo
-                    if cartao.limite_utilizado < 0:
-                        cartao.limite_utilizado = 0
-
-    # Deletar a transação
+    fatura_id, cartao_id = transacao.fatura_id, transacao.cartao_credito_id
     db.session.delete(transacao)
+    # Fatura e limite recalculados a partir do que sobrou (vale para parcela, à vista e estorno)
+    saldos.recalcular_fatura(fatura_id)
+    saldos.recalcular_limite(cartao_id)
     db.session.commit()
     flash('Transação deletada com sucesso!', 'success')
     return redirect(url_for('main.listar_transacoes'))
@@ -820,6 +805,9 @@ def toggle_pago_transacao(id):
 
     # Se está marcando como pago agora
     if not transacao.pago:
+        if not saldos.pode_ficar_pago(transacao.data):
+            return jsonify({'success': False,
+                            'message': 'Esta transação tem data futura. Marque como paga quando acontecer.'}), 400
         # Atualizar saldo da conta
         if transacao.tipo == 'receita':
             conta.saldo_atual += transacao.valor
@@ -886,12 +874,11 @@ def criar_transacao_inline():
             pago=bool(data.get('pago', False))
         )
 
-        # Atualizar saldo da conta (apenas se paga e não futura)
-        if transacao.pago and transacao.data <= date.today():
-            if transacao.tipo == 'receita':
-                conta.saldo_atual += transacao.valor
-            else:
-                conta.saldo_atual -= transacao.valor
+        # Data futura não fica paga; paga = saldo atualizado
+        if transacao.pago and not saldos.pode_ficar_pago(transacao.data):
+            transacao.pago = False
+        if transacao.pago:
+            saldos.aplicar(conta, transacao.tipo, transacao.valor)
 
         db.session.add(transacao)
         db.session.commit()
@@ -979,13 +966,7 @@ def recalcular_valor_fatura(fatura_id):
         return None
 
     # Somar todas as transações desta fatura
-    transacoes = Transacao.query.filter_by(fatura_id=fatura_id).all()
-    valor_total = sum(transacao.valor for transacao in transacoes)
-
-    # Atualizar valor da fatura
-    fatura.valor_total = valor_total
-
-    return valor_total
+    return saldos.recalcular_fatura(fatura_id)
 
 
 def gerar_transacoes_recorrentes(transacao_base, frequencia, data_inicio, quantidade, pago_inicial=False):
@@ -1023,11 +1004,11 @@ def gerar_transacoes_recorrentes(transacao_base, frequencia, data_inicio, quanti
         raise ValueError(f'Frequência inválida: {frequencia}')
 
     intervalo = intervalos[frequencia]
-    # Começar da segunda ocorrência, pois a primeira já é a transacao_base
-    data_atual = data_inicio + intervalo
 
     # Gerar a quantidade especificada de transações (menos 1, pois a primeira já existe)
     for i in range(quantidade - 1):
+        # sempre a partir da data inicial (somar mês a mês acumulado faz 31 -> 28 -> 28...)
+        data_atual = data_inicio + intervalo * (i + 1)
         # Determinar se esta transação específica deve ser marcada como paga
         # Apenas transações passadas devem ser marcadas como pagas
         transacao_paga = pago_inicial and data_atual <= date.today()
@@ -1051,9 +1032,6 @@ def gerar_transacoes_recorrentes(transacao_base, frequencia, data_inicio, quanti
 
         db.session.add(nova_transacao)
         transacoes_criadas.append(nova_transacao)
-
-        # Avançar para a próxima data
-        data_atual += intervalo
 
     return transacoes_criadas
 
@@ -1284,8 +1262,12 @@ def pagar_fatura(id):
         Fatura.id == id,
         CartaoCredito.user_id == current_user.id
     ).first_or_404()
-    valor_pago = validate_decimal(request.form.get('valor_pago', fatura.valor_total),
-                                  min_value=Decimal('0'), max_value=VALOR_MAXIMO)
+    if fatura.status == 'paga':
+        flash('Esta fatura já está paga.', 'info')
+        return redirect(url_for('main.ver_fatura', id=id))
+    devido = Decimal(fatura.valor_total or 0) - Decimal(fatura.valor_pago or 0)
+    valor_pago = validate_decimal(request.form.get('valor_pago', devido),
+                                  min_value=Decimal('0.01'), max_value=VALOR_MAXIMO)
     if valor_pago is None:
         flash('Valor pago inválido!', 'error')
         return redirect(url_for('main.ver_fatura', id=id))
@@ -1293,12 +1275,11 @@ def pagar_fatura(id):
     if request.form.get('conta_id'):
         conta_pagamento = get_owned_or_404(Conta, request.form.get('conta_id'))
 
-    fatura.valor_pago = valor_pago
-    if valor_pago >= fatura.valor_total:
+    # pagamentos se somam (pagamento parcial + restante depois)
+    fatura.valor_pago = Decimal(fatura.valor_pago or 0) + valor_pago
+    if fatura.valor_pago >= Decimal(fatura.valor_total or 0):
         fatura.status = 'paga'
-        # Liberar limite do cartão quando fatura é totalmente paga
-        cartao = fatura.cartao
-        cartao.limite_utilizado -= fatura.valor_total
+    saldos.recalcular_limite(fatura.cartao_id)
 
     # Criar transação de pagamento na conta
     if conta_pagamento is not None:
@@ -1320,7 +1301,7 @@ def pagar_fatura(id):
             pago=True  # Marcar como pago automaticamente
         )
 
-        conta_pagamento.saldo_atual -= valor_pago
+        saldos.aplicar(conta_pagamento, 'despesa', valor_pago)
 
         db.session.add(transacao)
 
@@ -1437,43 +1418,33 @@ def api_evolucao_patrimonial():
         inicio = date(2020, 1, 1)
         agrupamento = extract('month', Transacao.data)
 
-    # Buscar transações agrupadas
+    hoje = date.today()
+    # movimentos de caixa já realizados (compras no cartão saem quando a fatura é paga)
     transacoes = db.session.query(
         Transacao.data,
         Transacao.tipo,
         func.sum(Transacao.valor).label('total')
     ).join(Conta).filter(
         Conta.user_id == current_user.id,
-        Transacao.data >= inicio,
-        Transacao.pago == True
-    ).group_by(Transacao.data, Transacao.tipo).order_by(Transacao.data).all()
+        Transacao.data > inicio,
+        Transacao.data <= hoje,
+        Transacao.pago == True,
+        db.or_(Transacao.forma_pagamento.is_(None), Transacao.forma_pagamento != 'cartao_credito'),
+    ).group_by(Transacao.data, Transacao.tipo).all()
+    liquido_do_dia = defaultdict(float)
+    for t in transacoes:
+        liquido_do_dia[t.data] += float(t.total) if t.tipo == 'receita' else -float(t.total)
 
-    # Calcular patrimônio regressivamente
+    # saldo no fim de cada dia, voltando a partir do saldo de hoje
     datas = []
     valores = []
-    saldo_temp = float(saldo_atual)
-
-    # Criar dicionário de variações diárias
-    variacoes = defaultdict(float)
-    for t in reversed(transacoes):
-        data_str = t.data.strftime('%Y-%m-%d')
-        if t.tipo == 'receita':
-            variacoes[data_str] -= float(t.total)
-        else:
-            variacoes[data_str] += float(t.total)
-
-    # Gerar pontos do gráfico (do passado para o presente)
-    data_atual = inicio
-    while data_atual <= date.today():
-        data_str = data_atual.strftime('%Y-%m-%d')
-        if data_str in variacoes:
-            saldo_temp -= variacoes[data_str]
-        datas.append(data_str)
-        valores.append(round(saldo_temp, 2))
-        data_atual += relativedelta(days=1)
-        saldo_temp += variacoes.get(data_str, 0)
-
-    # Reverter para ordem correta
+    saldo_dia = float(saldo_atual)
+    dia = hoje
+    while dia >= inicio:
+        datas.append(dia.strftime('%Y-%m-%d'))
+        valores.append(round(saldo_dia, 2))
+        saldo_dia -= liquido_do_dia.get(dia, 0.0)
+        dia -= relativedelta(days=1)
     datas.reverse()
     valores.reverse()
 
@@ -1502,7 +1473,9 @@ def api_analise_cartoes():
         seis_meses_atras = date.today() - relativedelta(months=6)
         gasto_total = db.session.query(func.sum(Transacao.valor)).filter(
             Transacao.cartao_credito_id == cartao.id,
-            Transacao.data >= seis_meses_atras
+            Transacao.tipo == 'despesa',
+            Transacao.data >= seis_meses_atras,
+            Transacao.data <= date.today(),
         ).scalar() or 0
 
         gasto_medio = float(gasto_total) / 6
@@ -2214,15 +2187,14 @@ def adicionar_deposito(id):
         return redirect(url_for('main.ver_meta', id=id))
 
     deposito = DepositoMeta(
-        meta_id=meta.id,
         valor=valor,
         data=data,
         observacao=observacao
     )
-    db.session.add(deposito)
+    meta.depositos.append(deposito)
 
-    # Verificar se a meta foi concluída
-    if meta.valor_acumulado() + valor >= meta.valor_alvo:
+    # Verificar se a meta foi concluída (o acumulado já inclui este depósito)
+    if meta.valor_acumulado() >= meta.valor_alvo:
         meta.status = 'concluida'
         meta.data_conclusao = date.today()
         flash('Parabéns! Meta concluída!', 'success')
@@ -2247,12 +2219,13 @@ def deletar_deposito(meta_id, deposito_id):
         meta_id=meta_id
     ).first_or_404()
 
-    # Se a meta estava concluída, reverter status
-    if meta.status == 'concluida':
+    meta.depositos.remove(deposito)
+    db.session.delete(deposito)
+    # Só volta a ativa se, sem este depósito, deixou de atingir o alvo
+    if meta.status == 'concluida' and meta.valor_acumulado() < meta.valor_alvo:
         meta.status = 'ativa'
         meta.data_conclusao = None
 
-    db.session.delete(deposito)
     db.session.commit()
     flash('Depósito removido com sucesso!', 'success')
     return redirect(url_for('main.ver_meta', id=meta_id))

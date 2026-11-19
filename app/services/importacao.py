@@ -441,8 +441,10 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                     elif not alvo.id_externo:
                         alvo.id_externo = item.id_externo
                     if not alvo.pago and alvo.pode_marcar_pago():
-                        alvo.pago = True  # o banco confirmou o lançamento
+                        if alvo.data > hoje:
+                            alvo.data = item.data  # previsto para o futuro, mas o banco diz que já aconteceu
                         if alvo.data <= hoje:
+                            alvo.pago = True  # o banco confirmou o lançamento
                             _aplicar_saldo(alvo.conta, alvo.tipo, alvo.valor)
                     conciliadas += 1
                     continue
@@ -478,8 +480,8 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
                     cartao.limite_utilizado = max(Decimal('0'), (cartao.limite_utilizado or 0) + sinal * item.valor)
                 else:
                     nova.forma_pagamento = 'dinheiro'
-                    nova.pago = True  # se está no extrato, já aconteceu
-                    if item.data <= hoje:
+                    nova.pago = item.data <= hoje  # se está no extrato, já aconteceu
+                    if nova.pago:
                         _aplicar_saldo(conta, item.tipo, item.valor)
                 db.session.add(nova)
                 db.session.flush()
@@ -498,6 +500,9 @@ def aplicar_conciliacao(conciliacao, decisoes=None):
         conciliacao.linhas_conciliadas = conciliadas
         conciliacao.linhas_importadas = importadas
         conciliacao.status = 'concluida'
+        if cartao:
+            from app.services.saldos import recalcular_limite
+            recalcular_limite(cartao.id)  # limite usado = o que falta pagar nas faturas
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -572,7 +577,11 @@ def desfazer_conciliacao(conciliacao):
                 item.transacao_id = None
             db.session.delete(t)
             removidas += 1
+        cartao_id = conciliacao.cartao_credito_id
         db.session.delete(conciliacao)
+        if cartao_id:
+            from app.services.saldos import recalcular_limite
+            recalcular_limite(cartao_id)
         db.session.commit()
     except Exception:
         db.session.rollback()
