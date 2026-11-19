@@ -58,7 +58,7 @@
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Distribuição por Tipo de Ativo</h5>
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Onde está o seu dinheiro investido (por tipo)</h5>
                 </div>
                 <div class="card-body">
                     <div id="grafico-distribuicao-tipos" style="height: 400px;"></div>
@@ -70,7 +70,7 @@
         <div class="col-md-6 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Composição da Carteira (Top 10)</h5>
+                    <h5 class="mb-0"><i class="bi bi-list-ol"></i> Seus 10 maiores investimentos</h5>
                 </div>
                 <div class="card-body">
                     <div id="grafico-composicao" style="height: 400px;"></div>
@@ -82,7 +82,7 @@
         <div class="col-md-12 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Rentabilidade por Ativo</h5>
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Quanto cada investimento ganhou ou perdeu desde a compra</h5>
                 </div>
                 <div class="card-body">
                     <div id="grafico-rentabilidade" style="height: 500px;"></div>
@@ -94,7 +94,7 @@
         <div class="col-md-12 mb-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Evolução do Patrimônio (Últimos 12 Meses)</h5>
+                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Valor da carteira nos últimos 12 meses</h5>
                 </div>
                 <div class="card-body">
                     <div id="grafico-evolucao" style="height: 400px;"></div>
@@ -105,7 +105,6 @@
 </div>
 
 <!-- Plotly.js -->
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -148,194 +147,89 @@ function carregarResumo() {
         .catch(error => console.error('Erro ao carregar resumo:', error));
 }
 
+var PALETA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+
 function carregarDistribuicaoTipos() {
     fetch('{{ url_for("investimentos.api_grafico_distribuicao_tipos") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.labels.length === 0) {
-                document.getElementById('grafico-distribuicao-tipos').innerHTML =
-                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.labels.length) {
+                GF.vazio('grafico-distribuicao-tipos', 'Nenhum investimento cadastrado.', 'Adicione ativos na sua carteira para ver este gráfico.');
                 return;
             }
-
-            const trace = {
-                type: 'pie',
-                labels: data.labels,
-                values: data.values,
-                hoverinfo: 'label+value+percent',
-                textinfo: 'percent',
-                hole: 0.4,
-                marker: {
-                    colors: ['#0066ff', '#00cc66', '#ff9900', '#ff3366', '#9933ff', '#00cccc', '#ffcc00', '#cc0066']
-                }
-            };
-
-            const layout = {
-                margin: { t: 0, b: 0, l: 0, r: 0 },
-                showlegend: true,
-                legend: {
-                    orientation: 'v',
-                    x: 1,
-                    y: 0.5
-                }
-            };
-
-            Plotly.newPlot('grafico-distribuicao-tipos', [trace], layout, {responsive: true});
+            var total = data.values.reduce(function (a, b) { return a + b; }, 0);
+            // barras horizontais: mais fácil de comparar que pizza
+            var ordem = data.labels.map(function (l, i) { return { l: l, v: data.values[i] }; }).sort(function (a, b) { return b.v - a.v; });
+            GF.desenhar('grafico-distribuicao-tipos', [{
+                type: 'bar', orientation: 'h', y: ordem.map(function (o) { return o.l; }), x: ordem.map(function (o) { return o.v; }),
+                text: ordem.map(function (o) { return GF.curto(o.v) + '  ·  ' + GF.pct(o.v / total * 100); }), textposition: 'outside', cliponaxis: false,
+                textfont: { color: GF.COR.tinta }, marker: { color: GF.COR.ranking, cornerradius: 4 },
+                hovertext: ordem.map(function (o) { return '<b>' + GF.esc(o.l) + '</b><br>' + GF.brl(o.v) + ' · ' + GF.pct(o.v / total * 100, 1) + ' da carteira'; }),
+                hoverinfo: 'text'
+            }], { margin: { l: 8, r: 120 }, yaxis: { autorange: 'reversed', tickprefix: '', tickformat: '', gridcolor: 'rgba(0,0,0,0)', zeroline: false, tickfont: { color: GF.COR.tinta } },
+                  xaxis: { visible: false } });
         })
-        .catch(error => console.error('Erro ao carregar distribuição:', error));
+        .catch(function () { GF.erro('grafico-distribuicao-tipos'); });
 }
 
 function carregarComposicao() {
     fetch('{{ url_for("investimentos.api_grafico_composicao_carteira") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.length === 0) {
-                document.getElementById('grafico-composicao').innerHTML =
-                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.length) {
+                GF.vazio('grafico-composicao', 'Nenhum investimento cadastrado.', 'Adicione ativos na sua carteira para ver este gráfico.');
                 return;
             }
-
-            const tickers = data.map(d => d.ticker);
-            const valores = data.map(d => d.valor);
-            const percentuais = data.map(d => d.percentual);
-
-            const trace = {
-                type: 'bar',
-                x: tickers,
-                y: valores,
-                text: percentuais.map(p => p.toFixed(1) + '%'),
-                textposition: 'auto',
-                hovertemplate: '<b>%{x}</b><br>' +
-                              'Valor: R$ %{y:,.2f}<br>' +
-                              '<extra></extra>',
-                marker: {
-                    color: '#0066ff',
-                    line: {
-                        color: '#004499',
-                        width: 1
-                    }
-                }
-            };
-
-            const layout = {
-                margin: { t: 20, b: 60, l: 60, r: 20 },
-                xaxis: {
-                    title: 'Ticker',
-                    tickangle: -45
-                },
-                yaxis: {
-                    title: 'Valor (R$)',
-                    tickformat: ',.2f'
-                },
-                showlegend: false
-            };
-
-            Plotly.newPlot('grafico-composicao', [trace], layout, {responsive: true});
+            GF.desenhar('grafico-composicao', [{
+                type: 'bar', orientation: 'h', y: data.map(function (d) { return d.ticker; }), x: data.map(function (d) { return d.valor; }),
+                text: data.map(function (d) { return GF.curto(d.valor) + '  ·  ' + GF.pct(d.percentual, 1); }), textposition: 'outside', cliponaxis: false,
+                textfont: { color: GF.COR.tinta }, marker: { color: GF.COR.ranking, cornerradius: 4 },
+                hovertext: data.map(function (d) { return '<b>' + GF.esc(d.ticker) + '</b><br>' + GF.brl(d.valor) + ' · ' + GF.pct(d.percentual, 1) + ' da carteira'; }),
+                hoverinfo: 'text'
+            }], { margin: { l: 8, r: 120 }, yaxis: { autorange: 'reversed', tickprefix: '', tickformat: '', gridcolor: 'rgba(0,0,0,0)', zeroline: false, tickfont: { color: GF.COR.tinta } },
+                  xaxis: { visible: false } });
         })
-        .catch(error => console.error('Erro ao carregar composição:', error));
+        .catch(function () { GF.erro('grafico-composicao'); });
 }
 
 function carregarRentabilidade() {
     fetch('{{ url_for("investimentos.api_grafico_rentabilidade_ativos") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.length === 0) {
-                document.getElementById('grafico-rentabilidade').innerHTML =
-                    '<div class="alert alert-info">Nenhum ativo na carteira</div>';
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.length) {
+                GF.vazio('grafico-rentabilidade', 'Nenhum investimento cadastrado.', 'Adicione ativos na sua carteira para ver este gráfico.');
                 return;
             }
-
-            const tickers = data.map(d => d.ticker);
-            const rentabilidades = data.map(d => d.rentabilidade_percentual);
-            const cores = rentabilidades.map(r => r >= 0 ? '#00cc66' : '#ff3366');
-
-            const trace = {
-                type: 'bar',
-                x: tickers,
-                y: rentabilidades,
-                text: rentabilidades.map(r => r.toFixed(2) + '%'),
-                textposition: 'auto',
-                hovertemplate: '<b>%{x}</b><br>' +
-                              'Rentabilidade: %{y:.2f}%<br>' +
-                              '<extra></extra>',
-                marker: {
-                    color: cores
-                }
-            };
-
-            const layout = {
-                margin: { t: 20, b: 60, l: 60, r: 20 },
-                xaxis: {
-                    title: 'Ticker',
-                    tickangle: -45
-                },
-                yaxis: {
-                    title: 'Rentabilidade (%)',
-                    zeroline: true,
-                    zerolinewidth: 2,
-                    zerolinecolor: '#999'
-                },
-                showlegend: false,
-                shapes: [{
-                    type: 'line',
-                    x0: -0.5,
-                    x1: tickers.length - 0.5,
-                    y0: 0,
-                    y1: 0,
-                    line: {
-                        color: '#999',
-                        width: 2,
-                        dash: 'dash'
-                    }
-                }]
-            };
-
-            Plotly.newPlot('grafico-rentabilidade', [trace], layout, {responsive: true});
+            var r = data.map(function (d) { return d.rentabilidade_percentual; });
+            GF.desenhar('grafico-rentabilidade', [{
+                type: 'bar', x: data.map(function (d) { return d.ticker; }), y: r,
+                text: r.map(function (v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + GF.pct(Math.abs(v), 1); }), textposition: 'outside', cliponaxis: false,
+                textfont: { color: GF.COR.tinta2 },
+                marker: { color: r.map(function (v) { return v >= 0 ? GF.COR.sobrou : GF.COR.faltou; }), cornerradius: 4 },
+                hovertext: data.map(function (d) { return '<b>' + GF.esc(d.ticker) + '</b><br>' + (d.rentabilidade_percentual >= 0 ? 'Ganhou ' : 'Perdeu ') +
+                    GF.pct(Math.abs(d.rentabilidade_percentual), 2) + ' desde a compra'; }),
+                hoverinfo: 'text'
+            }], { margin: { t: 24 }, yaxis: { tickprefix: '', ticksuffix: '%', tickformat: ',.0f', zerolinecolor: GF.COR.apagado, zerolinewidth: 1.5 } });
         })
-        .catch(error => console.error('Erro ao carregar rentabilidade:', error));
+        .catch(function () { GF.erro('grafico-rentabilidade'); });
 }
 
 function carregarEvolucao() {
     fetch('{{ url_for("investimentos.api_evolucao_patrimonial") }}')
-        .then(response => response.json())
-        .then(data => {
-            const trace = {
-                type: 'scatter',
-                mode: 'lines+markers',
-                x: data.meses,
-                y: data.valores,
-                fill: 'tozeroy',
-                fillcolor: 'rgba(0, 102, 255, 0.1)',
-                line: {
-                    color: '#0066ff',
-                    width: 3
-                },
-                marker: {
-                    size: 8,
-                    color: '#0066ff'
-                },
-                hovertemplate: '<b>%{x}</b><br>' +
-                              'Patrimônio: R$ %{y:,.2f}<br>' +
-                              '<extra></extra>'
-            };
-
-            const layout = {
-                margin: { t: 20, b: 60, l: 80, r: 20 },
-                xaxis: {
-                    title: 'Mês',
-                    tickangle: -45
-                },
-                yaxis: {
-                    title: 'Patrimônio (R$)',
-                    tickformat: ',.2f'
-                },
-                showlegend: false,
-                hovermode: 'x unified'
-            };
-
-            Plotly.newPlot('grafico-evolucao', [trace], layout, {responsive: true});
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.valores || !data.valores.length || !data.valores.some(Boolean)) {
+                GF.vazio('grafico-evolucao', 'Ainda sem histórico da carteira.', 'O gráfico aparece depois das primeiras compras de ativos.');
+                return;
+            }
+            GF.desenhar('grafico-evolucao', [{
+                type: 'scatter', mode: 'lines+markers', x: data.meses, y: data.valores,
+                line: { color: GF.COR.saldo, width: 2.5 }, marker: { size: 8, color: GF.COR.saldo, line: { color: '#fff', width: 2 } },
+                fill: 'tozeroy', fillcolor: 'rgba(42,120,214,0.10)',
+                hovertext: data.meses.map(function (m, i) { return '<b>' + GF.esc(m) + '</b><br>Carteira: ' + GF.brl(data.valores[i]); }), hoverinfo: 'text'
+            }], { margin: { t: 8 } });
         })
-        .catch(error => console.error('Erro ao carregar evolução:', error));
+        .catch(function () { GF.erro('grafico-evolucao'); });
 }
 </script>
 
