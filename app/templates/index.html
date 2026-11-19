@@ -92,23 +92,23 @@
                     <div class="col-12 col-md"><div class="gf-kpi-rotulo">Sobra média por mês</div><div class="gf-kpi-valor" data-k="sobra_media">–</div><div class="gf-kpi-nota">média dos últimos 3 meses</div></div>
                 </div>
 
-                <h6 class="mt-2 mb-1">Quanto você terá nas contas no fim de cada mês</h6>
+                <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mt-2">
+                <h6 class="mb-1">Saldo no fim de cada mês</h6>
                 <div class="gf-legenda" aria-hidden="true">
                     <span><i class="gf-linha"></i> Aconteceu</span>
                     <span><i class="gf-linha gf-linha-tracejada"></i> Previsão</span>
                 </div>
-                <div id="caixaSaldoChart" class="gf-grafico" style="height: 300px;" role="img" aria-label="Saldo das contas no fim de cada mês"></div>
-
-                <h6 class="mt-4 mb-1">Quanto sobrou ou faltou em cada mês</h6>
-                <div class="gf-legenda" aria-hidden="true">
-                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou (entrou mais do que saiu)</span>
-                    <span><i class="gf-amostra" style="background:#e34948"></i> Faltou (saiu mais do que entrou)</span>
                 </div>
-                <div id="caixaSobraChart" class="gf-grafico" style="height: 240px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês"></div>
+                <div id="caixaSaldoChart" class="gf-grafico" style="height: 280px;" role="img" aria-label="Saldo das contas no fim de cada mês"></div>
 
-                <p class="gf-explica"><strong>Como ler:</strong> passe o mouse (ou toque) em um mês para ver quanto entrou e saiu.
-                    A área sombreada é o futuro. Compras no cartão contam no mês em que a fatura vence.
-                    Transferências entre as suas próprias contas não contam como ganho nem gasto.</p>
+                <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mt-4">
+                <h6 class="mb-1">Sobrou ou faltou no mês</h6>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou</span>
+                    <span><i class="gf-amostra" style="background:#e34948"></i> Faltou</span>
+                </div>
+                </div>
+                <div id="caixaSobraChart" class="gf-grafico" style="height: 200px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês"></div>
             </div>
         </div>
     </div>
@@ -124,12 +124,11 @@
             <div class="card-body">
                 <div id="fluxoFrase" class="gf-frase">Carregando…</div>
                 <div class="gf-legenda" aria-hidden="true">
-                    <span><i class="gf-linha"></i> Saldo das contas ao fim do dia</span>
-                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Dia com entrada</span>
-                    <span><i class="gf-amostra" style="background:#eb6834"></i> Dia com saída</span>
+                    <span><i class="gf-linha"></i> Saldo</span>
+                    <span><i class="gf-amostra" style="background:#2a78d6;border-radius:50%"></i> Entrada</span>
+                    <span><i class="gf-amostra" style="background:#eb6834;border-radius:50%"></i> Saída</span>
                 </div>
-                <div id="fluxoCaixaChart" class="gf-grafico" style="height: 340px;" role="img" aria-label="Saldo das contas em cada dia do mês"></div>
-                <p class="gf-explica">Passe o mouse (ou toque) em um dia para ver o que entrou e saiu nele.</p>
+                <div id="fluxoCaixaChart" class="gf-grafico" style="height: 300px;" role="img" aria-label="Saldo das contas em cada dia do mês"></div>
             </div>
         </div>
     </div>
@@ -658,13 +657,10 @@ document.addEventListener('DOMContentLoaded', function() {
             var menor = futuros.reduce(function (a, b) { return b.saldo < a.saldo ? b : a; }, futuros[0]);
             var faltam = futuros.filter(function (i) { return i.resultado < 0; }).length;
             if (negativo) {
-                GF.frase('caixaFrase', '<i class="bi bi-exclamation-triangle-fill"></i> <strong>Atenção:</strong> pela previsão, o dinheiro nas suas contas fica <strong>negativo em ' +
-                    GF.esc(negativo.rotulo) + '</strong> (' + GF.brl(negativo.saldo, true) + ').' +
-                    (faltam ? ' Em ' + faltam + (faltam === 1 ? ' mês' : ' meses') + ' você deve gastar mais do que recebe.' : ''), 'alerta');
+                GF.frase('caixaFrase', '<i class="bi bi-exclamation-triangle-fill"></i> Saldo previsto fica <strong>negativo em ' +
+                    GF.esc(negativo.rotulo) + '</strong> (' + GF.brl(negativo.saldo, true) + ').', 'alerta');
             } else if (menor) {
-                GF.frase('caixaFrase', 'Pela previsão, seu saldo <strong>continua positivo</strong> nos próximos meses. O ponto mais baixo é <strong>' +
-                    GF.brl(menor.saldo, true) + ' em ' + GF.esc(menor.rotulo) + '</strong>.' +
-                    (faltam ? ' Mas em ' + faltam + (faltam === 1 ? ' mês' : ' meses') + ' você deve gastar mais do que recebe.' : ''), faltam ? null : 'ok');
+                GF.frase('caixaFrase', 'Ponto mais baixo previsto: <strong>' + GF.brl(menor.saldo, true) + '</strong> em ' + GF.esc(menor.rotulo) + '.');
             }
 
             var x = m.map(function (i) { return i.rotulo; });
@@ -678,36 +674,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     '<br><b>Saldo no fim do mês: ' + GF.brl(i.saldo) + '</b>' +
                     (i.estimado ? '<br><i>inclui seus gastos médios ainda não lançados</i>' : '');
             });
-            var futuroSombra = iHoje >= 0 ? [{ type: 'rect', xref: 'x', x0: iHoje - 0.5, x1: m.length - 0.5, yref: 'paper', y0: 0, y1: 1,
-                fillcolor: 'rgba(42,120,214,0.06)', line: { width: 0 }, layer: 'below' }] : [];
+            var futuroSombra = iHoje >= 0 ? [{ type: 'line', xref: 'x', x0: x[iHoje], x1: x[iHoje], yref: 'paper', y0: 0, y1: 1,
+                line: { color: C.eixo, width: 1, dash: 'dot' } }] : [];
             var marcaHoje = iHoje >= 0 ? [{ x: x[iHoje], y: 1, yref: 'paper', yanchor: 'bottom', showarrow: false,
                 text: 'hoje', font: { size: 12, color: C.tinta2 } }] : [];
             var minimo = Math.min.apply(null, m.map(function (i) { return i.saldo; }));
-            var zonaNegativa = minimo < 0 ? [{ type: 'rect', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: minimo * 1.15, y1: 0,
-                fillcolor: 'rgba(227,73,72,0.08)', line: { width: 0 }, layer: 'below' }] : [];
+            var linhaZero = minimo < 0 ? [{ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0,
+                line: { color: C.faltou, width: 1.5, dash: 'dot' } }] : [];
 
             var real = m.map(function (i, k) { return iHoje < 0 || k <= iHoje ? i.saldo : null; });
             var prev = m.map(function (i, k) { return iHoje >= 0 && k >= iHoje ? i.saldo : null; });
             GF.desenhar('caixaSaldoChart', [
-                { x: x, y: real, type: 'scatter', mode: 'lines+markers', line: { color: C.saldo, width: 2.5 },
-                  marker: { size: 8, color: C.saldo, line: { color: '#fff', width: 2 } },
-                  hovertext: dica, hoverinfo: 'text', name: 'Aconteceu' },
-                { x: x, y: prev, type: 'scatter', mode: 'lines+markers', line: { color: C.saldo, width: 2.5, dash: 'dash' },
-                  marker: { size: 8, color: '#fff', line: { color: C.saldo, width: 2 } },
-                  hovertext: dica, hoverinfo: 'text', name: 'Previsão' }
+                { x: x, y: real, type: 'scatter', mode: 'lines', line: { color: C.saldo, width: 3, shape: 'spline', smoothing: 0.6 },
+                  fill: 'tozeroy', fillcolor: 'rgba(42,120,214,0.12)', hovertext: dica, hoverinfo: 'text', name: 'Aconteceu' },
+                { x: x, y: prev, type: 'scatter', mode: 'lines', line: { color: C.saldo, width: 3, dash: 'dot', shape: 'spline', smoothing: 0.6 },
+                  fill: 'tozeroy', fillcolor: 'rgba(42,120,214,0.05)', hovertext: dica, hoverinfo: 'text', name: 'Previsão' },
+                { x: [x[iHoje >= 0 ? iHoje : m.length - 1]], y: [m[iHoje >= 0 ? iHoje : m.length - 1].saldo], type: 'scatter', mode: 'markers',
+                  marker: { size: 10, color: C.saldo, line: { color: '#fff', width: 3 } }, hoverinfo: 'skip' }
             ], {
-                margin: { t: 22 }, shapes: futuroSombra.concat(zonaNegativa), annotations: marcaHoje.concat(minimo < 0 ? [{
-                    xref: 'paper', x: 0, xanchor: 'left', y: minimo, yanchor: 'bottom', showarrow: false,
-                    text: 'abaixo de zero', font: { size: 11, color: C.textoRuim } }] : []),
-                yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 }
+                margin: { t: 22 }, hovermode: 'x', shapes: futuroSombra.concat(linhaZero), annotations: marcaHoje,
+                yaxis: { zeroline: minimo >= 0, zerolinecolor: C.eixo, nticks: 7 }
             });
 
             GF.desenhar('caixaSobraChart', [{
                 x: x, y: m.map(function (i) { return i.resultado; }), type: 'bar',
                 marker: { color: m.map(function (i) { return i.resultado >= 0 ? C.sobrou : C.faltou; }),
-                          opacity: m.map(function (i) { return i.tipo === 'real' ? 1 : 0.75; }), cornerradius: 4 },
+                          opacity: m.map(function (i) { return i.tipo === 'real' ? 1 : 0.55; }), cornerradius: 3 },
                 hovertext: dica, hoverinfo: 'text'
-            }], { margin: { t: 8 }, shapes: futuroSombra, yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 } });
+            }], { margin: { t: 8 }, bargap: 0.5, shapes: futuroSombra, yaxis: { zerolinecolor: C.eixo, zerolinewidth: 1 } });
         }
         function carregar() {
             var estimar = document.querySelector('input[name="caixaModo"]:checked').value;
@@ -730,14 +724,13 @@ document.addEventListener('DOMContentLoaded', function() {
         var fim = dias[dias.length - 1].saldo;
         var pior = dias.reduce(function (a, b) { return b.saldo < a.saldo ? b : a; }, dias[0]);
         var hoje = dias.find(function (d) { return d.is_hoje; });
-        var texto = 'Você começa ' + nomeMes + ' com <strong>' + GF.brl(inicio, true) + '</strong> e ' +
-            (dias[dias.length - 1].is_futuro || hoje ? 'deve terminar' : 'terminou') + ' com <strong>' + GF.brl(fim, true) + '</strong>.';
+        var texto = 'Começa com <strong>' + GF.brl(inicio, true) + '</strong> · termina com <strong>' + GF.brl(fim, true) + '</strong>';
         var tom = fim < 0 ? 'alerta' : null;
         if (pior.saldo < 0) {
-            texto += ' <i class="bi bi-exclamation-triangle-fill"></i> No <strong>dia ' + pior.dia + '</strong> o saldo fica negativo (' + GF.brl(pior.saldo, true) + ').';
+            texto += ' · <i class="bi bi-exclamation-triangle-fill"></i> negativo no dia ' + pior.dia + ' (' + GF.brl(pior.saldo, true) + ')';
             tom = 'alerta';
         } else if (pior.saldo < Math.min(inicio, fim)) {
-            texto += ' O dia mais apertado é o <strong>dia ' + pior.dia + '</strong>, com ' + GF.brl(pior.saldo, true) + '.';
+            texto += ' · mais apertado: dia ' + pior.dia + ' (' + GF.brl(pior.saldo, true) + ')';
         }
         GF.frase('fluxoFrase', texto, tom);
 
@@ -762,8 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var minimo = Math.min.apply(null, dias.map(function (d) { return d.saldo; }));
         if (minimo < 0) {
-            shapes.push({ type: 'rect', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: minimo * 1.15, y1: 0,
-                          fillcolor: 'rgba(227,73,72,0.08)', line: { width: 0 }, layer: 'below' });
+            shapes.push({ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0, line: { color: C.faltou, width: 1.5, dash: 'dot' } });
         }
         // marcadores só nos dias com movimento: azul = entrou mais, laranja = saiu mais
         var corDia = dias.map(function (d) {
@@ -778,8 +770,9 @@ document.addEventListener('DOMContentLoaded', function() {
             hovertext: dica, hoverinfo: 'text'
         }], {
             margin: { t: 22 }, shapes: shapes, annotations: anotacoes,
-            xaxis: { title: { text: 'dia do mês', font: { size: 12, color: C.apagado } }, dtick: 5, tick0: 1 },
-            yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 }
+            hovermode: 'x',
+            xaxis: { dtick: 5, tick0: 1, ticksuffix: '', tickprefix: 'dia ' },
+            yaxis: { zeroline: false }
         });
     })();
 });

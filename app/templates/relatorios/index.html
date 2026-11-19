@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4" style="margin-top: 2rem;">
     <div>
         <h1 style="margin-bottom: 0.5rem;">Relatórios</h1>
-        <p class="text-muted mb-0">Para onde vai o seu dinheiro, explicado em poucas palavras</p>
+        
     </div>
     <div class="d-flex gap-2 align-items-end">
         <div>
@@ -67,32 +67,30 @@
     <!-- RESUMO -->
     <div class="tab-pane fade show active" id="resumo" role="tabpanel" aria-labelledby="resumo-tab">
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0"><span>Para onde foi o seu dinheiro em <span class="js-mes-ano"></span></span></h5></div>
+            <div class="card-header"><h5 class="mb-0"><span>Gastos de <span class="js-mes-ano"></span></span></h5></div>
             <div class="card-body">
                 <div id="fraseCategorias" class="gf-frase">Carregando…</div>
                 <div id="graficoCategorias" class="gf-grafico" style="height: 360px;" role="img" aria-label="Gastos do mês por categoria, do maior para o menor"></div>
-                <p class="gf-explica">Cada barra é uma categoria, do maior gasto para o menor. Compras no cartão contam no dia da compra.
-                    Transferências entre as suas contas e pagamentos de fatura não entram (não são gastos novos).</p>
             </div>
         </div>
 
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0"><span>Quanto entrou e quanto saiu em <span class="js-ano"></span></span></h5></div>
+            <div class="card-header"><h5 class="mb-0"><span>Entrou × saiu em <span class="js-ano"></span></span></h5></div>
             <div class="card-body">
                 <div id="fraseAno" class="gf-frase">Carregando…</div>
                 <div class="gf-legenda" aria-hidden="true">
                     <span><i class="gf-amostra" style="background:#2a78d6"></i> Entrou</span>
                     <span><i class="gf-amostra" style="background:#eb6834"></i> Saiu</span>
-                    <span><i class="gf-amostra" style="background:#c3c2b7"></i> Meses futuros (o que já está lançado)</span>
+                    <span><i class="gf-amostra" style="background:#c3c2b7"></i> Futuro</span>
                 </div>
-                <div id="graficoAno" class="gf-grafico" style="height: 320px;" role="img" aria-label="Entradas e saídas de cada mês do ano"></div>
+                <div id="graficoAno" class="gf-grafico" style="height: 280px;" role="img" aria-label="Entradas e saídas de cada mês do ano"></div>
 
-                <h6 class="mt-4 mb-1">Sobrou ou faltou em cada mês</h6>
+                <h6 class="mt-4 mb-2">Sobrou ou faltou</h6>
                 <div class="gf-legenda" aria-hidden="true">
                     <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou</span>
                     <span><i class="gf-amostra" style="background:#e34948"></i> Faltou</span>
                 </div>
-                <div id="graficoAnoSobra" class="gf-grafico" style="height: 220px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês do ano"></div>
+                <div id="graficoAnoSobra" class="gf-grafico" style="height: 180px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês do ano"></div>
             </div>
         </div>
     </div>
@@ -119,7 +117,7 @@
     <div class="tab-pane fade" id="evolucao" role="tabpanel" aria-labelledby="evolucao-tab">
         <div class="card mb-4">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <h5 class="mb-0">Quanto você tinha nas contas em cada dia</h5>
+                <h5 class="mb-0">Saldo das contas</h5>
                 <div class="btn-group btn-group-sm gf-segmentos" role="group" aria-label="Período">
                     <input type="radio" class="btn-check" name="periodoEvolucao" id="evo30" value="mes">
                     <label class="btn btn-outline-primary" for="evo30">30 dias</label>
@@ -131,8 +129,7 @@
             </div>
             <div class="card-body">
                 <div id="fraseEvolucao" class="gf-frase">Carregando…</div>
-                <div id="graficoEvolucao" class="gf-grafico" style="height: 360px;" role="img" aria-label="Saldo das contas ao longo do tempo"></div>
-                <p class="gf-explica">Soma do saldo de todas as suas contas. Não inclui investimentos nem o que você deve no cartão.</p>
+                <div id="graficoEvolucao" class="gf-grafico" style="height: 320px;" role="img" aria-label="Saldo das contas ao longo do tempo"></div>
             </div>
         </div>
     </div>
@@ -141,7 +138,7 @@
     <div class="tab-pane fade" id="comparacao" role="tabpanel" aria-labelledby="comparacao-tab">
         <div class="card mb-4">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <h5 class="mb-0">Entrou × saiu, período a período</h5>
+                <h5 class="mb-0">Entrou × saiu por período</h5>
                 <div class="btn-group btn-group-sm gf-segmentos" role="group" aria-label="Períodos">
                     <input type="radio" class="btn-check" name="periodoComparacao" id="cmp6" value="mensal:6" checked>
                     <label class="btn btn-outline-primary" for="cmp6">6 meses</label>
@@ -159,13 +156,13 @@
                     <span><i class="gf-amostra" style="background:#2a78d6"></i> Entrou</span>
                     <span><i class="gf-amostra" style="background:#eb6834"></i> Saiu</span>
                 </div>
-                <div id="graficoComparacao" class="gf-grafico" style="height: 320px;" role="img" aria-label="Entradas e saídas por período"></div>
+                <div id="graficoComparacao" class="gf-grafico" style="height: 280px;" role="img" aria-label="Entradas e saídas por período"></div>
                 <h6 class="mt-4 mb-1">Sobrou ou faltou</h6>
                 <div class="gf-legenda" aria-hidden="true">
                     <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou</span>
                     <span><i class="gf-amostra" style="background:#e34948"></i> Faltou</span>
                 </div>
-                <div id="graficoSaldoPeriodo" class="gf-grafico" style="height: 220px;" role="img" aria-label="Quanto sobrou ou faltou por período"></div>
+                <div id="graficoSaldoPeriodo" class="gf-grafico" style="height: 180px;" role="img" aria-label="Quanto sobrou ou faltou por período"></div>
             </div>
         </div>
     </div>
@@ -173,7 +170,7 @@
     <!-- ORÇAMENTOS -->
     <div class="tab-pane fade" id="orcamentos" role="tabpanel" aria-labelledby="orcamentos-tab">
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0"><span>Orçamento de <span class="js-mes-ano"></span>: quanto já usou de cada limite</span></h5></div>
+            <div class="card-header"><h5 class="mb-0"><span>Orçamento de <span class="js-mes-ano"></span></span></h5></div>
             <div class="card-body">
                 <div id="fraseOrcamentos" class="gf-frase">Carregando…</div>
                 <div id="listaOrcamentos"></div>
@@ -195,11 +192,10 @@
     <!-- CARTÕES -->
     <div class="tab-pane fade" id="cartoes" role="tabpanel" aria-labelledby="cartoes-tab">
         <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0">Quanto do limite de cada cartão está ocupado</h5></div>
+            <div class="card-header"><h5 class="mb-0">Limite dos cartões</h5></div>
             <div class="card-body">
                 <div id="fraseCartoes" class="gf-frase">Carregando…</div>
                 <div id="listaCartoes"></div>
-                <p class="gf-explica">O limite ocupado inclui as parcelas futuras: ele só volta a ficar livre conforme você paga as faturas.</p>
             </div>
         </div>
     </div>
@@ -274,16 +270,15 @@
                 valores = valores.slice(0, MAX - 1).concat([resto]);
             }
             var maior = d.categorias[0], maiorV = d.valores[0];
-            GF.frase('fraseCategorias', 'Você gastou <strong>' + GF.brl(total, true) + '</strong> em ' + GF.esc(rotuloMes()) +
-                '. O maior gasto foi <strong>' + GF.esc(maior) + '</strong>: ' + GF.brl(maiorV, true) +
-                ' (' + GF.pct(maiorV / total * 100) + ' do total).');
+            GF.frase('fraseCategorias', 'Total <strong>' + GF.brl(total, true) + '</strong> · maior: <strong>' + GF.esc(maior) +
+                '</strong> (' + GF.pct(maiorV / total * 100) + ')');
             var rot = valores.map(function (v) { return GF.curto(v) + '  ·  ' + GF.pct(v / total * 100); });
-            var altura = Math.max(220, nomes.length * 40 + 30);
+            var altura = Math.max(200, nomes.length * 36 + 20);
             document.getElementById('graficoCategorias').style.height = altura + 'px';
             GF.desenhar('graficoCategorias', [{
                 type: 'bar', orientation: 'h', y: nomes, x: valores, text: rot, textposition: 'outside', cliponaxis: false,
                 textfont: { color: C.tinta, size: 13 },
-                marker: { color: C.ranking, cornerradius: 4 },
+                marker: { color: C.ranking, cornerradius: 4 }, width: 0.6,
                 hovertext: nomes.map(function (n, i) { return '<b>' + GF.esc(n) + '</b><br>' + GF.brl(valores[i]) + ' · ' + GF.pct(valores[i] / total * 100, 1) + ' do total'; }),
                 hoverinfo: 'text'
             }], {
@@ -313,9 +308,8 @@
             var sai = d.despesas.filter(function (_, i) { return !futuro[i]; }).reduce(function (a, b) { return a + b; }, 0);
             var mesesFaltou = passados.filter(function (v) { return v < 0; }).length;
             var ate = futuro.indexOf(true) === -1 ? '' : ' até ' + GF.mesNome(Math.max(0, futuro.indexOf(true) - 1));
-            GF.frase('fraseAno', 'Em ' + ano() + ate + ': entrou <strong>' + GF.brl(ent, true) + '</strong>, saiu <strong>' +
-                GF.brl(sai, true) + '</strong> e ' + (ent - sai >= 0 ? 'sobrou' : 'faltou') + ' <strong>' + GF.brl(Math.abs(ent - sai), true) + '</strong>.' +
-                (mesesFaltou ? ' Em <strong>' + mesesFaltou + (mesesFaltou === 1 ? ' mês' : ' meses') + '</strong> você gastou mais do que recebeu.' : ''),
+            GF.frase('fraseAno', 'Entrou <strong>' + GF.brl(ent, true) + '</strong> · saiu <strong>' + GF.brl(sai, true) + '</strong> · ' +
+                (ent - sai >= 0 ? 'sobrou' : 'faltou') + ' <strong>' + GF.brl(Math.abs(ent - sai), true) + '</strong>' + (ate ? ' (' + ate.trim() + ')' : ''),
                 ent - sai < 0 ? 'alerta' : null);
             var x = d.meses.map(function (_, i) { return GF.mesCurto(i); });
             var dica = d.meses.map(function (_, i) {
@@ -346,8 +340,7 @@
                 return;
             }
             var top3 = d.valores.slice(0, 3).reduce(function (a, b) { return a + b; }, 0);
-            GF.frase('fraseRanking', 'As <strong>3 maiores categorias</strong> somam ' + GF.brl(top3, true) + ', ou <strong>' +
-                GF.pct(top3 / d.total * 100) + '</strong> de tudo o que você gastou em ' + GF.esc(rotuloMes()) + '.');
+            GF.frase('fraseRanking', '3 maiores = <strong>' + GF.pct(top3 / d.total * 100) + '</strong> do total');
             var maior = d.valores[0];
             var html = '<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr>' +
                 '<th>#</th><th>Categoria</th><th class="d-none d-md-table-cell" style="width:35%"></th><th class="text-end">Gasto</th><th class="text-end">Do total</th><th class="text-end d-none d-sm-table-cell">Lançamentos</th></tr></thead><tbody>';
@@ -374,8 +367,8 @@
                 el.innerHTML = '';
                 return;
             }
-            GF.frase('fraseRecorrentes', 'Nos próximos 30 dias há <strong>' + d.quantidade + ' lançamentos que se repetem</strong>. Juntos, pesam cerca de <strong>' +
-                GF.brl(d.total_mensal_estimado, true) + ' por mês</strong>.');
+            GF.frase('fraseRecorrentes', '<strong>' + d.quantidade + '</strong> nos próximos 30 dias · cerca de <strong>' +
+                GF.brl(d.total_mensal_estimado, true) + '/mês</strong>');
             var lista = d.recorrentes.slice().sort(function (a, b) { return a.proxima_data < b.proxima_data ? -1 : 1; });
             var html = '<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Próxima data</th><th>Descrição</th>' +
                 '<th class="d-none d-md-table-cell">Categoria</th><th>Repete</th><th class="text-end">Valor</th></tr></thead><tbody>';
@@ -398,9 +391,7 @@
             var ini = d.valores[0], fim = d.valores[d.valores.length - 1], dif = fim - ini;
             var dataIni = d.datas[0].split('-').reverse().join('/');
             var menorI = d.valores.indexOf(Math.min.apply(null, d.valores));
-            GF.frase('fraseEvolucao', 'Hoje você tem <strong>' + GF.brl(fim, true) + '</strong> nas contas. Em ' + dataIni + ' tinha ' +
-                GF.brl(ini, true) + ': ' + (dif >= 0 ? 'aumentou' : 'diminuiu') + ' <strong>' + GF.brl(Math.abs(dif), true) + '</strong>.' +
-                (d.valores[menorI] < 0 ? ' O saldo ficou negativo em alguns dias (o mais baixo foi ' + GF.brl(d.valores[menorI], true) + ').' : ''),
+            GF.frase('fraseEvolucao', 'Hoje <strong>' + GF.brl(fim, true) + '</strong> · <strong>' + GF.comSinal(dif, true) + '</strong> desde ' + dataIni,
                 dif < 0 ? 'alerta' : null);
             var dica = d.datas.map(function (s, i) { return '<b>' + s.split('-').reverse().join('/') + '</b><br>Saldo: ' + GF.brl(d.valores[i]); });
             GF.desenhar('graficoEvolucao', [{
@@ -424,13 +415,11 @@
             var ult = n - 1, ant = n - 2;
             var mediaSai = d.despesas.reduce(function (a, b) { return a + b; }, 0) / n;
             var negativos = d.saldos.filter(function (s) { return s < 0; }).length;
-            var txt = 'Em média você gastou <strong>' + GF.brl(mediaSai, true) + '</strong> por período.';
+            var txt = 'Gasto médio <strong>' + GF.brl(mediaSai, true) + '</strong>';
             if (ant >= 0 && d.despesas[ant] > 0) {
                 var varPct = (d.despesas[ult] - d.despesas[ant]) / d.despesas[ant] * 100;
-                txt += ' Em <strong>' + GF.esc(d.periodos[ult]) + '</strong> seus gastos ' + (varPct >= 0 ? 'subiram ' : 'caíram ') +
-                    '<strong>' + GF.pct(Math.abs(varPct)) + '</strong> em relação a ' + GF.esc(d.periodos[ant]) + '.';
+                txt += ' · ' + GF.esc(d.periodos[ult]) + ': <strong>' + (varPct >= 0 ? '+' : '−') + GF.pct(Math.abs(varPct)) + '</strong> vs ' + GF.esc(d.periodos[ant]);
             }
-            if (negativos) txt += ' Em <strong>' + negativos + ' dos ' + n + ' períodos</strong> você gastou mais do que recebeu.';
             GF.frase('fraseComparacao', txt, negativos > n / 2 ? 'alerta' : null);
             var dica = d.periodos.map(function (p, i) {
                 return '<b>' + GF.esc(p) + '</b><br>Entrou: ' + GF.brl(d.receitas[i]) + '<br>Saiu: ' + GF.brl(d.despesas[i]) +
@@ -440,12 +429,15 @@
                 { type: 'bar', x: d.periodos, y: d.receitas, name: 'Entrou', marker: { color: C.entrou, cornerradius: 4 }, hovertext: dica, hoverinfo: 'text' },
                 { type: 'bar', x: d.periodos, y: d.despesas, name: 'Saiu', marker: { color: C.saiu, cornerradius: 4 }, hovertext: dica, hoverinfo: 'text' }
             ], { barmode: 'group', margin: { t: 8 } });
+            var maxS = Math.max.apply(null, d.saldos), minS = Math.min.apply(null, d.saldos);
+            var maxAbs = Math.max(Math.abs(maxS), Math.abs(minS)) || 1;
             GF.desenhar('graficoSaldoPeriodo', [{
                 type: 'bar', x: d.periodos, y: d.saldos, hovertext: dica, hoverinfo: 'text',
-                text: d.saldos.map(function (s) { return GF.curto(s); }), textposition: 'outside', cliponaxis: false,
+                text: d.saldos.map(function (s) { return Math.abs(s) >= maxAbs * 0.1 ? GF.curto(s) : ''; }), textposition: 'outside', cliponaxis: false,
                 textfont: { color: C.tinta2, size: 12 },
                 marker: { color: d.saldos.map(function (s) { return s >= 0 ? C.sobrou : C.faltou; }), cornerradius: 4 }
-            }], { margin: { t: 20 }, yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 } });
+            }], { margin: { t: 20 }, yaxis: { zerolinecolor: C.eixo, zerolinewidth: 1,
+                  range: [Math.min(0, minS) - maxAbs * 0.25, Math.max(0, maxS) + maxAbs * 0.25] } });
         }).catch(function () { GF.erro('graficoComparacao'); });
     }
     document.querySelectorAll('input[name="periodoComparacao"]').forEach(function (el) { el.addEventListener('change', carregarComparacao); });
@@ -466,15 +458,8 @@
             }
             var estouradas = d.orcamentos.filter(function (o) { return o.percentual > 100; });
             var usado = d.total_orcado ? d.total_gasto / d.total_orcado * 100 : 0;
-            var txt = usado > 100
-                ? 'Você já gastou <strong>' + GF.brl(d.total_gasto, true) + '</strong>, mais do que os <strong>' + GF.brl(d.total_orcado, true) +
-                  '</strong> planejados para ' + GF.esc(rotuloMes()) + ' (' + GF.pct(usado) + ' do total).'
-                : 'Você já usou <strong>' + GF.brl(d.total_gasto, true) + '</strong> de <strong>' + GF.brl(d.total_orcado, true) +
-                  '</strong> planejados para ' + GF.esc(rotuloMes()) + ' (' + GF.pct(usado) + ').';
-            txt += estouradas.length
-                ? ' <strong>' + estouradas.length + (estouradas.length === 1 ? ' categoria passou' : ' categorias passaram') + ' do limite:</strong> ' +
-                  estouradas.map(function (o) { return GF.esc(o.categoria); }).join(', ') + '.'
-                : ' Nenhuma categoria passou do limite.';
+            var txt = '<strong>' + GF.brl(d.total_gasto, true) + '</strong> de ' + GF.brl(d.total_orcado, true) + ' (' + GF.pct(usado) + ')' +
+                (estouradas.length ? ' · <strong>' + estouradas.length + (estouradas.length === 1 ? ' estourou' : ' estouraram') + '</strong>' : '');
             GF.frase('fraseOrcamentos', txt, estouradas.length ? 'alerta' : 'ok');
             var ordem = d.orcamentos.slice().sort(function (a, b) { return b.percentual - a.percentual; });
             el.innerHTML = ordem.map(function (o) {
@@ -500,8 +485,7 @@
                 GF.vazio(el, 'Nenhuma meta ativa.', 'Crie uma meta em Metas para acompanhar aqui.');
                 return;
             }
-            GF.frase('fraseMetas', 'Você já juntou <strong>' + GF.brl(d.total_acumulado, true) + '</strong> de <strong>' + GF.brl(d.total_alvo, true) +
-                '</strong> somando ' + (d.metas.length === 1 ? 'sua meta' : 'suas ' + d.metas.length + ' metas') + '.');
+            GF.frase('fraseMetas', '<strong>' + GF.brl(d.total_acumulado, true) + '</strong> de ' + GF.brl(d.total_alvo, true) + ' guardados');
             el.innerHTML = d.metas.map(function (m) {
                 var s = m.status === 'atrasado' ? { tipo: 'critico', texto: 'Atrasada', cor: C.critico }
                       : m.status === 'adiantado' ? { tipo: 'bom', texto: 'Adiantada', cor: C.bom }
@@ -514,8 +498,8 @@
                     GF.barraProgresso(m.percentual, s.cor, m.titulo) +
                     '<div class="gf-item-detalhe">' + GF.pct(m.percentual) + ' concluído' +
                     (m.faltante > 0 ? ' · faltam <strong>' + GF.brl(m.faltante, true) + '</strong> em ' + m.meses_restantes + (m.meses_restantes === 1 ? ' mês' : ' meses') +
-                        ' · para chegar lá, guarde cerca de <strong>' + GF.brl(porMes, true) + ' por mês</strong>' : ' · meta atingida!') +
-                    '</div><div class="gf-item-detalhe">Pelo tempo que já passou, o esperado era ter ' + GF.pct(Math.max(0, Math.min(100, m.percentual_tempo))) + '.</div></div>';
+                        ' · guarde <strong>' + GF.brl(porMes, true) + '/mês</strong>' : ' · atingida!') +
+                    '</div></div>';
             }).join('');
         }).catch(function () { GF.erro('listaMetas'); });
     }
@@ -532,11 +516,7 @@
             var lim = 0, usado = 0;
             d.cartoes.forEach(function (c) { lim += c.limite; usado += c.utilizado; });
             var apertados = d.cartoes.filter(function (c) { return c.percentual >= 80; });
-            GF.frase('fraseCartoes', 'Somando seus cartões, <strong>' + GF.brl(usado, true) + '</strong> do limite de ' + GF.brl(lim, true) +
-                ' estão ocupados; ainda há <strong>' + GF.brl(lim - usado, true) + ' livres</strong>.' +
-                (apertados.length ? ' <strong>' + apertados.map(function (c) { return GF.esc(c.nome); }).join(', ') + '</strong> ' +
-                    (apertados.length === 1 ? 'está' : 'estão') + ' com mais de 80% do limite usado.' : ''),
-                apertados.length ? 'alerta' : null);
+            GF.frase('fraseCartoes', '<strong>' + GF.brl(lim - usado, true) + '</strong> livres de ' + GF.brl(lim, true), apertados.length ? 'alerta' : null);
             el.innerHTML = d.cartoes.map(function (c) {
                 var s = c.percentual >= 80 ? { tipo: 'critico', texto: 'Limite quase todo usado', cor: C.critico }
                       : c.percentual >= 50 ? { tipo: 'atencao', texto: 'Mais da metade usada', cor: C.atencao }
@@ -545,8 +525,7 @@
                     '<span class="d-flex align-items-center gap-2"><span class="gf-item-valor">' + GF.brl(c.disponivel, true) + ' livres de ' + GF.brl(c.limite, true) + '</span>' +
                     GF.selo(s.tipo, s.texto) + '</span></div>' +
                     GF.barraProgresso(c.percentual, s.cor, c.nome) +
-                    '<div class="gf-item-detalhe">' + GF.pct(c.percentual) + ' ocupado (' + GF.brl(c.utilizado, true) + ') · gasto médio nos últimos 6 meses: <strong>' +
-                    GF.brl(c.gasto_medio_mensal, true) + ' por mês</strong>' +
+                    '<div class="gf-item-detalhe">' + GF.pct(c.percentual) + ' usado · média <strong>' + GF.brl(c.gasto_medio_mensal, true) + '/mês</strong>' +
                     (c.faturas_abertas ? ' · ' + c.faturas_abertas + (c.faturas_abertas === 1 ? ' fatura em aberto' : ' faturas em aberto') : '') + '</div></div>';
             }).join('');
         }).catch(function () { GF.erro('listaCartoes'); });

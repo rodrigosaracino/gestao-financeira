@@ -87,21 +87,22 @@ window.GF = (function () {
 
     function layout(extra) {
         var base = {
-            font: { family: 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif', size: 13, color: COR.tinta2 },
+            font: { family: 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif', size: 12, color: COR.tinta2 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             separators: ',.',
-            margin: { l: 16, r: 16, t: 8, b: 8 },
+            margin: { l: 8, r: 8, t: 8, b: 8 },
             hovermode: 'closest',
             hoverlabel: { bgcolor: '#ffffff', bordercolor: COR.grade, font: { color: COR.tinta, size: 13 }, align: 'left' },
             showlegend: false,
             legend: { orientation: 'h', x: 0, xanchor: 'left', y: 1.02, yanchor: 'bottom', font: { color: COR.tinta, size: 13 } },
             xaxis: { showgrid: false, zeroline: false, linecolor: COR.eixo, tickcolor: COR.eixo, ticks: '', fixedrange: true, automargin: true,
                      tickfont: { color: COR.tinta2 } },
-            yaxis: { gridcolor: COR.grade, zeroline: true, zerolinecolor: COR.eixo, zerolinewidth: 1, linecolor: COR.eixo,
-                     tickprefix: 'R$ ', tickformat: ',.0f', fixedrange: true, automargin: true, tickfont: { color: COR.apagado } },
-            bargap: 0.35,
-            bargroupgap: 0.12
+            yaxis: { gridcolor: '#efede8', griddash: 'dot', zeroline: true, zerolinecolor: COR.eixo, zerolinewidth: 1, showline: false,
+                     tickprefix: 'R$ ', tickformat: ',.0f', nticks: 5, fixedrange: true, automargin: true,
+                     tickfont: { color: COR.apagado, size: 11 }, ticklabelstandoff: 6 },
+            bargap: 0.45,
+            bargroupgap: 0.15
         };
         return mesclar(base, extra || {});
     }
@@ -117,6 +118,12 @@ window.GF = (function () {
             return;
         }
         var lay = layout(extraLayout);
+        // barras horizontais: o eixo Y é de categorias e todas precisam aparecer
+        if (traces.some(function (t) { return t.orientation === 'h'; })) {
+            lay.yaxis.nticks = 0;
+            lay.yaxis.tickmode = 'linear';
+            lay.yaxis.dtick = 1;
+        }
         // tela estreita (celular): rótulos do eixo X retos e espaçados, nada inclinado
         if (el.clientWidth && el.clientWidth < 640 && lay.xaxis.type === 'date') {
             lay.xaxis.tickangle = 0;

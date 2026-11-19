@@ -911,18 +911,18 @@ h3 {
    GRÁFICOS (padrão único, ver static/js/graficos.js)
    ============================================ */
 .gf-frase {
-    font-size: 1rem;
-    line-height: 1.45;
-    color: var(--color-text-primary);
-    background: #f4f6f9;
-    border-left: 4px solid #2a78d6;
-    border-radius: var(--radius-sm);
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    color: var(--color-text-secondary);
+    margin: 0 0 0.75rem;
+    padding: 0;
+    background: none;
+    border: 0;
 }
-.gf-frase-alerta { border-left-color: #d03b3b; background: #fdf3f2; }
-.gf-frase-ok { border-left-color: #0ca30c; background: #f2f9f2; }
-.gf-frase strong { font-weight: 700; }
+.gf-frase strong { color: var(--color-text-primary); font-weight: 700; }
+.gf-frase-alerta { color: #b42318; }
+.gf-frase-alerta strong { color: #b42318; }
+.gf-frase-ok { color: var(--color-text-secondary); }
 .gf-explica { font-size: 0.85rem; color: var(--color-text-secondary); margin: 0.25rem 0 0; }
 .gf-explica + .gf-explica { margin-top: 0.15rem; }
 .gf-legenda { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.875rem; color: var(--color-text-secondary); margin-bottom: 0.5rem; }
@@ -961,4 +961,26 @@ h3 {
     .btn-group.gf-segmentos .btn { flex: 1 1 0; width: auto; margin-bottom: 0; padding: 0.5rem 0.4rem; font-size: 0.8rem; }
     .btn-group.gf-segmentos .btn:not(:first-of-type) { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
     .btn-group.gf-segmentos .btn:not(:last-of-type) { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+}
+
+/* Menu: página atual destacada, itens compactos, dropdowns */
+.navbar .nav-link { padding: 0.45rem 0.75rem !important; margin: 0 0.1rem; white-space: nowrap; }
+.navbar .nav-link.active { color: var(--color-accent-blue) !important; background: rgba(0, 102, 255, 0.08); font-weight: 600; }
+.navbar .dropdown-menu { border: 1px solid var(--color-border-light); border-radius: var(--radius-md); box-shadow: var(--shadow-md); padding: 0.4rem; }
+.navbar .dropdown-item { border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; font-size: 0.9rem; display: flex; align-items: center; gap: 0.6rem; }
+.navbar .dropdown-item:active { background: var(--color-accent-blue); }
+@media (min-width: 992px) and (max-width: 1199px) {
+    .navbar .nav-link { padding: 0.45rem 0.5rem !important; font-size: 0.85rem; }
+    .navbar .nav-link i { display: none; }
+}
+
+/* Números dos cartões de resumo: nunca quebram no meio */
+.card.metric-card .metric-value {
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.4rem, 1.1rem + 0.9vw, 2rem);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
