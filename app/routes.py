@@ -154,6 +154,13 @@ def index():
     saldo_previsto_fim_mes = projecao_fluxo[-1]['saldo'] if projecao_fluxo else float(saldo_total)
     resultado_mes = round(total_receitas_mes - total_despesas_mes, 2)
 
+    # Receitas do mês já recebidas x ainda a receber (sem transferências)
+    receitas_recebidas_mes = sum(
+        float(t.valor) for t in transacoes_mes
+        if t.tipo == 'receita' and t.pago and t.forma_pagamento != 'cartao_credito'
+        and especiais.get(t.categoria_id, 'normal') == 'normal'
+    )
+
     # Separar receitas e despesas realizadas vs futuras
     receitas_realizadas = sum(
         float(t.valor) for t in transacoes_mes
@@ -326,6 +333,7 @@ def index():
                          contas=contas,
                          saldo_total=saldo_total,
                          receitas_mes=total_receitas_mes,
+                         receitas_recebidas_mes=receitas_recebidas_mes,
                          despesas_mes=total_despesas_mes,
                          receitas_realizadas=receitas_realizadas,
                          despesas_realizadas=despesas_realizadas,
@@ -465,6 +473,15 @@ def listar_transacoes():
         filtro_resultado(),
     ).scalar() or Decimal('0.00')
 
+    receitas_recebidas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
+        Conta.user_id == current_user.id,
+        Transacao.tipo == 'receita',
+        Transacao.pago == True,
+        Transacao.data >= primeiro_dia,
+        Transacao.data <= ultimo_dia,
+        filtro_resultado(),
+    ).scalar() or Decimal('0.00')
+
     total_movimentacoes = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'despesa',
@@ -514,6 +531,8 @@ def listar_transacoes():
                          total_receitas=total_receitas,
                          total_despesas=total_despesas,
                          total_movimentacoes=total_movimentacoes,
+                         receitas_recebidas=receitas_recebidas,
+                         receitas_a_receber=total_receitas - receitas_recebidas,
                          saldo_mes=saldo_mes,
                          outro_lado=outro_lado,
                          mes_sistema=datetime.now().month,

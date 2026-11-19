@@ -42,7 +42,8 @@
                 <i class="bi bi-arrow-down-circle"></i> Receitas
             </h5>
             <div class="metric-value">{{ receitas_mes|brl }}</div>
-            <div class="metric-label">Total do mês</div>
+            <div class="metric-label">Recebido {{ receitas_recebidas_mes|brl(0) }} · a receber {{ (receitas_mes - receitas_recebidas_mes)|brl(0) }}</div>
+            <div class="metric-label">Sem transferências entre suas contas</div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
