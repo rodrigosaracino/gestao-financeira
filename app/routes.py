@@ -95,16 +95,15 @@ def index():
     especiais = fluxo.ids_fora_do_resultado(current_user.id)
     transacoes_por_dia = defaultdict(lambda: {'receitas': Decimal('0.00'), 'despesas': Decimal('0.00'),
                                               'liquido': Decimal('0.00')})
-    realizado_no_mes = Decimal('0.00')
     for transacao in transacoes_mes:
         if transacao.forma_pagamento == 'cartao_credito':
             continue
+        natureza = especiais.get(transacao.categoria_id, 'normal')
+        if natureza != 'normal' and not (transacao.pago and transacao.data <= hoje):
+            continue  # pagamento de fatura futuro já está na fatura em aberto (igual a fluxo.caixa_mensal)
         dia_key = transacao.data
         sinal = 1 if transacao.tipo == 'receita' else -1
         transacoes_por_dia[dia_key]['liquido'] += sinal * transacao.valor
-        if transacao.pago and transacao.data <= hoje:
-            realizado_no_mes += sinal * transacao.valor
-        natureza = especiais.get(transacao.categoria_id, 'normal')
         if natureza == 'transferencia':
             continue
         if transacao.tipo == 'receita':
@@ -120,10 +119,11 @@ def index():
             transacoes_por_dia[dia_key]['despesas'] += valor_pendente
             transacoes_por_dia[dia_key]['liquido'] -= valor_pendente
 
-    # Calcular projeção dia a dia do saldo, partindo do saldo do início do mês
-    # (o saldo de hoje já contém o que foi realizado no mês)
+    # Calcular projeção dia a dia do saldo, partindo do saldo do início do mês escolhido.
+    # Mês futuro: inclui tudo o que está lançado entre hoje e o início dele.
     projecao_fluxo = []
-    saldo_acumulado = float(saldo_total - realizado_no_mes)
+    saldo_inicio_mes = fluxo.saldo_inicio_do_mes(current_user.id, primeiro_dia, hoje)
+    saldo_acumulado = float(saldo_inicio_mes)
 
     # Gerar dados para cada dia do mês
     dia_atual = primeiro_dia
@@ -152,6 +152,7 @@ def index():
     total_receitas_mes = sum(float(d['receitas']) for d in transacoes_por_dia.values())
     total_despesas_mes = sum(float(d['despesas']) for d in transacoes_por_dia.values())
     saldo_previsto_fim_mes = projecao_fluxo[-1]['saldo'] if projecao_fluxo else float(saldo_total)
+    resultado_mes = round(total_receitas_mes - total_despesas_mes, 2)
 
     # Separar receitas e despesas realizadas vs futuras
     receitas_realizadas = sum(
@@ -329,6 +330,8 @@ def index():
                          receitas_realizadas=receitas_realizadas,
                          despesas_realizadas=despesas_realizadas,
                          saldo_previsto=saldo_previsto_fim_mes,
+                         saldo_inicio_mes=float(saldo_inicio_mes),
+                         resultado_mes=resultado_mes,
                          faturas_abertas=faturas_abertas,
                          total_faturas=total_faturas,
                          mes_filtro=mes_filtro,
