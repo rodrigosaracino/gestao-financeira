@@ -776,16 +776,30 @@ def deletar_transacao(id):
         Conta.user_id == current_user.id
     ).first_or_404()
 
-    # Reverter o efeito no saldo (só transação paga que não é de cartão)
-    if transacao.pago and transacao.forma_pagamento != 'cartao_credito':
-        saldos.aplicar(transacao.conta, transacao.tipo, transacao.valor, sinal=-1)
+    # "proximas": esta parcela e as seguintes da mesma compra no cartão
+    if request.form.get('escopo') == 'proximas':
+        alvo = saldos.parcelas_seguintes(transacao)
+    else:
+        alvo = [transacao]
 
-    fatura_id, cartao_id = transacao.fatura_id, transacao.cartao_credito_id
-    db.session.delete(transacao)
-    # Fatura e limite recalculados a partir do que sobrou (vale para parcela, à vista e estorno)
-    saldos.recalcular_fatura(fatura_id)
-    saldos.recalcular_limite(cartao_id)
+    faturas, cartoes = set(), set()
+    for t in alvo:
+        # Reverter o efeito no saldo (só transação paga que não é de cartão)
+        if t.pago and t.forma_pagamento != 'cartao_credito':
+            saldos.aplicar(t.conta, t.tipo, t.valor, sinal=-1)
+        faturas.add(t.fatura_id)
+        cartoes.add(t.cartao_credito_id)
+        db.session.delete(t)
+    # Faturas e limite recalculados a partir do que sobrou
+    for fatura_id in faturas - {None}:
+        saldos.recalcular_fatura(fatura_id)
+    for cartao_id in cartoes - {None}:
+        saldos.recalcular_limite(cartao_id)
     db.session.commit()
+    if len(alvo) > 1:
+        flash(f'{len(alvo)} parcelas excluídas (da {alvo[0].numero_parcela}/{alvo[0].total_parcelas} '
+              f'à {alvo[-1].numero_parcela}/{alvo[-1].total_parcelas}).', 'success')
+        return redirect(url_for('main.listar_transacoes'))
     flash('Transação deletada com sucesso!', 'success')
     return redirect(url_for('main.listar_transacoes'))
 

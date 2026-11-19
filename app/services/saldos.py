@@ -8,6 +8,7 @@ Invariantes:
 - Fatura.valor_total = compras - estornos lançados nela.
 - CartaoCredito.limite_utilizado = o que falta pagar nas faturas não pagas.
 """
+import re
 from datetime import date
 from decimal import Decimal, ROUND_DOWN
 
@@ -63,3 +64,39 @@ def dividir_em_parcelas(valor_total, n):
     valor_total = Decimal(valor_total)
     parcela = (valor_total / n).quantize(CENTAVO, rounding=ROUND_DOWN)
     return [parcela] * (n - 1) + [valor_total - parcela * (n - 1)]
+
+
+_RE_SUFIXO_PARCELA = re.compile(
+    r'\s*(\(\s*\d{1,2}\s*/\s*\d{1,2}\s*\)|-?\s*PARC(?:ELA)?\.?\s*\d{1,2}\s*(?:/|DE)\s*\d{1,2})\s*$', re.I)
+
+
+def _base_compra(descricao):
+    from app.matching import normalizar_descricao
+    return normalizar_descricao(_RE_SUFIXO_PARCELA.sub('', descricao or '').strip() or (descricao or ''))
+
+
+def parcelas_seguintes(transacao):
+    """
+    Esta parcela e as seguintes da mesma compra no cartão (numero >= o desta),
+    ordenadas. Reconhece a série pelo vínculo (transacao_pai_id) ou, para compras
+    importadas, pelo cartão, total de parcelas, descrição sem o "x/n" e a data
+    coerente com o número da parcela.
+    """
+    from dateutil.relativedelta import relativedelta
+    n, total = transacao.numero_parcela, transacao.total_parcelas
+    if not (transacao.cartao_credito_id and n and total and total > 1):
+        return [transacao]
+    raiz = transacao.transacao_pai_id or transacao.id
+    base = _base_compra(transacao.descricao)
+    serie = {transacao.id: transacao}
+    for t in Transacao.query.filter(Transacao.cartao_credito_id == transacao.cartao_credito_id,
+                                    Transacao.total_parcelas == total,
+                                    Transacao.numero_parcela >= n).all():
+        if t.id in serie:
+            continue
+        mesma_raiz = (t.transacao_pai_id or t.id) == raiz
+        esperado = transacao.data + relativedelta(months=t.numero_parcela - n)
+        mesma_compra = _base_compra(t.descricao) == base and abs((t.data - esperado).days) <= 20
+        if mesma_raiz or mesma_compra:
+            serie[t.id] = t
+    return sorted(serie.values(), key=lambda t: (t.numero_parcela, t.data))

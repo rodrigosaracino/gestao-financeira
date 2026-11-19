@@ -251,8 +251,13 @@
                             <button type="button" class="btn btn-sm btn-warning" onclick="editarTransacao({{ transacao.id }})" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button type="button" class="btn btn-sm btn-danger"
-                                    onclick="confirmarDelecao({{ transacao.id }})" title="Deletar">
+                            <button type="button" class="btn btn-sm btn-danger btn-excluir" title="Excluir"
+                                    data-id="{{ transacao.id }}" data-descricao="{{ transacao.descricao }}"
+                                    data-valor="{{ '%.2f'|format(transacao.valor) }}"
+                                    {% if transacao.forma_pagamento == 'cartao_credito' and transacao.numero_parcela and transacao.total_parcelas and transacao.total_parcelas > 1 %}
+                                    data-parcela="{{ transacao.numero_parcela }}" data-total="{{ transacao.total_parcelas }}"
+                                    {% endif %}
+                                    onclick="confirmarDelecao(this)">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -311,7 +316,39 @@
 <!-- Hidden Delete Form -->
 <form id="formDeletar" method="POST" style="display: none;">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="escopo" id="deletarEscopo" value="esta">
 </form>
+
+<!-- Caixa de confirmação de exclusão -->
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-labelledby="modalExcluirTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirTitulo"><i class="bi bi-trash"></i> Excluir transação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1"><strong id="excluirDescricao"></strong></p>
+                <p class="text-muted mb-3" id="excluirValor"></p>
+                <div id="excluirPerguntaParcela" class="d-none">
+                    <p class="mb-2">Esta é a parcela <strong id="excluirParcela"></strong> de uma compra parcelada. O que você quer excluir?</p>
+                    <ul class="small text-muted mb-0">
+                        <li><strong>Só esta parcela</strong>: as outras continuam nas faturas.</li>
+                        <li><strong>Esta e as próximas</strong>: <span id="excluirFaixa"></span>. Use quando a compra foi cancelada ou estornada.</li>
+                    </ul>
+                </div>
+                <p id="excluirPerguntaSimples" class="mb-0">Tem certeza? Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-danger d-none" id="btnExcluirProximas" onclick="executarDelecao('proximas')">
+                    Esta e as próximas
+                </button>
+                <button type="button" class="btn btn-danger" id="btnExcluirEsta" onclick="executarDelecao('esta')">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Modal -->
 <div class="modal fade" id="editModal" tabindex="-1">
@@ -521,13 +558,35 @@ function editarTransacao(id) {
     window.location.href = `/transacoes/${id}/editar`;
 }
 
-// Confirmar Deleção
-function confirmarDelecao(id) {
-    if (confirm('Tem certeza que deseja deletar esta transação?\n\nEsta ação não pode ser desfeita.')) {
-        const form = document.getElementById('formDeletar');
-        form.action = `/transacoes/${id}/deletar`;
-        form.submit();
+// Confirmar exclusão: caixa que pergunta "só esta parcela" ou "esta e as próximas"
+let idParaExcluir = null;
+function confirmarDelecao(botao) {
+    const d = botao.dataset;
+    idParaExcluir = d.id;
+    document.getElementById('excluirDescricao').textContent = d.descricao;
+    document.getElementById('excluirValor').textContent = 'R$ ' + d.valor.replace('.', ',');
+    const parcelada = !!d.parcela;
+    document.getElementById('excluirPerguntaParcela').classList.toggle('d-none', !parcelada);
+    document.getElementById('excluirPerguntaSimples').classList.toggle('d-none', parcelada);
+    document.getElementById('btnExcluirProximas').classList.toggle('d-none', !parcelada);
+    const ultima = parcelada && d.parcela === d.total;
+    document.getElementById('btnExcluirProximas').classList.toggle('d-none', !parcelada || ultima);
+    document.getElementById('btnExcluirEsta').textContent = parcelada ? 'Só esta parcela' : 'Excluir';
+    if (parcelada) {
+        document.getElementById('excluirParcela').textContent = d.parcela + '/' + d.total;
+        document.getElementById('excluirFaixa').textContent = ultima
+            ? 'esta já é a última parcela'
+            : 'da ' + d.parcela + '/' + d.total + ' até a ' + d.total + '/' + d.total;
     }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalExcluir')).show();
+}
+
+function executarDelecao(escopo) {
+    if (!idParaExcluir) return;
+    const form = document.getElementById('formDeletar');
+    document.getElementById('deletarEscopo').value = escopo;
+    form.action = `/transacoes/${idParaExcluir}/deletar`;
+    form.submit();
 }
 
 // Toast Notification Helper
