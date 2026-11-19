@@ -79,8 +79,9 @@ def parcelas_seguintes(transacao):
     """
     Esta parcela e as seguintes da mesma compra no cartão (numero >= o desta),
     ordenadas. Reconhece a série pelo vínculo (transacao_pai_id) ou, para compras
-    importadas, pelo cartão, total de parcelas, descrição sem o "x/n" e a data
-    coerente com o número da parcela.
+    importadas, pelo cartão, total de parcelas, descrição sem o "x/n", data
+    coerente com o número da parcela e valor parecido (o banco varia centavos).
+    Duas compras iguais no mesmo dia com valores diferentes são séries diferentes.
     """
     from dateutil.relativedelta import relativedelta
     n, total = transacao.numero_parcela, transacao.total_parcelas
@@ -95,8 +96,12 @@ def parcelas_seguintes(transacao):
         if t.id in serie:
             continue
         mesma_raiz = (t.transacao_pai_id or t.id) == raiz
+        if not mesma_raiz and t.numero_parcela == n:
+            continue  # outra parcela com o mesmo número é de outra compra
         esperado = transacao.data + relativedelta(months=t.numero_parcela - n)
-        mesma_compra = _base_compra(t.descricao) == base and abs((t.data - esperado).days) <= 20
+        tolerancia = max(Decimal('1.00'), Decimal(transacao.valor) * Decimal('0.02'))
+        mesma_compra = (_base_compra(t.descricao) == base and abs((t.data - esperado).days) <= 20
+                        and abs(Decimal(t.valor) - Decimal(transacao.valor)) <= tolerancia)
         if mesma_raiz or mesma_compra:
             serie[t.id] = t
     return sorted(serie.values(), key=lambda t: (t.numero_parcela, t.data))
