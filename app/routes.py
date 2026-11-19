@@ -207,7 +207,8 @@ def index():
 
     # Próximas receitas
     proximas_receitas = []
-    receitas_futuras = [t for t in transacoes_mes if t.tipo == 'receita' and t.data > hoje]
+    receitas_futuras = [t for t in transacoes_mes
+                        if t.tipo == 'receita' and t.data > hoje and t.categoria_id not in especiais]
     for receita in receitas_futuras[:5]:
         proximas_receitas.append({
             'id': receita.id,
@@ -443,18 +444,30 @@ def listar_transacoes():
     )
 
     # Calcular totais do mês do usuário logado
+    # receitas/despesas de verdade: transferências entre as próprias contas e
+    # pagamento de fatura não entram (só movem dinheiro); compras no cartão entram
     total_receitas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'receita',
         Transacao.data >= primeiro_dia,
-        Transacao.data <= ultimo_dia
+        Transacao.data <= ultimo_dia,
+        filtro_resultado(),
     ).scalar() or Decimal('0.00')
 
     total_despesas = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
         Conta.user_id == current_user.id,
         Transacao.tipo == 'despesa',
         Transacao.data >= primeiro_dia,
-        Transacao.data <= ultimo_dia
+        Transacao.data <= ultimo_dia,
+        filtro_resultado(),
+    ).scalar() or Decimal('0.00')
+
+    total_movimentacoes = db.session.query(func.sum(Transacao.valor)).join(Conta).filter(
+        Conta.user_id == current_user.id,
+        Transacao.tipo == 'despesa',
+        Transacao.data >= primeiro_dia,
+        Transacao.data <= ultimo_dia,
+        ~filtro_resultado(),
     ).scalar() or Decimal('0.00')
 
     saldo_mes = total_receitas - total_despesas
@@ -486,6 +499,7 @@ def listar_transacoes():
                          nome_mes=meses_pt[mes_atual],
                          total_receitas=total_receitas,
                          total_despesas=total_despesas,
+                         total_movimentacoes=total_movimentacoes,
                          saldo_mes=saldo_mes,
                          mes_sistema=datetime.now().month,
                          ano_sistema=datetime.now().year)

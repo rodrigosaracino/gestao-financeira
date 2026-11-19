@@ -95,3 +95,13 @@ def test_editar_natureza_da_categoria(app, usuarios, client_a):
         assert db.session.get(Categoria, a['receita']).natureza == 'transferencia'
     _, b = usuarios
     assert client_a.get(f"/categorias/{b['receita']}/editar").status_code == 404
+
+
+def test_lista_de_transacoes_totais_sem_transferencias(app, usuarios, client_a):
+    a, _ = usuarios
+    _cenario(app, a)
+    html = client_a.get('/transacoes?mes=10&ano=2026').get_data(as_text=True)
+    assert 'R$ 3000.00' in html          # receitas: sem os 700 de transferência
+    assert 'R$ 500.00' in html           # despesas: sem os 400 de pagamento de fatura
+    assert '+ R$ 2500.00' in html
+    assert 'Fora dos totais: R$ 400.00' in html

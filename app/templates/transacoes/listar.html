@@ -69,6 +69,12 @@
                         </div>
                     </div>
                 </div>
+                {% if total_movimentacoes %}
+                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                    <i class="bi bi-arrow-left-right"></i>
+                    Fora dos totais: R$ {{ "%.2f"|format(total_movimentacoes) }} em transferências entre suas contas e pagamentos de fatura.
+                </small>
+                {% endif %}
             </div>
         </div>
     </div>
