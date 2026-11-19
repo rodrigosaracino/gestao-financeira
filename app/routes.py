@@ -1673,13 +1673,13 @@ def api_comparacao_periodos():
             data_ref = hoje - relativedelta(months=i)
             inicio_periodo = date(data_ref.year, data_ref.month, 1)
             fim_periodo = date(data_ref.year, data_ref.month, monthrange(data_ref.year, data_ref.month)[1])
-            label = f"{inicio_periodo.strftime('%b/%y')}"
+            label = f"{fluxo.MESES_PT[inicio_periodo.month - 1]}/{str(inicio_periodo.year)[2:]}"
         elif tipo == 'trimestral':
             data_ref = hoje - relativedelta(months=i*3)
             inicio_periodo = date(data_ref.year, ((data_ref.month-1)//3)*3 + 1, 1)
             fim_mes = ((data_ref.month-1)//3)*3 + 3
             fim_periodo = date(data_ref.year, fim_mes, monthrange(data_ref.year, fim_mes)[1])
-            label = f"Q{((data_ref.month-1)//3)+1}/{data_ref.year}"
+            label = f"{((data_ref.month-1)//3)+1}º tri/{data_ref.year}"
         else:  # anual
             data_ref = hoje - relativedelta(years=i)
             inicio_periodo = date(data_ref.year, 1, 1)

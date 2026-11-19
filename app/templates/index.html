@@ -32,7 +32,7 @@
             <h5 class="card-title">
                 <i class="bi bi-wallet"></i> Saldo Atual
             </h5>
-            <div class="metric-value">R$ {{ "%.2f"|format(saldo_total) }}</div>
+            <div class="metric-value">{{ saldo_total|brl }}</div>
             <div class="metric-label">Todas as contas</div>
         </div>
     </div>
@@ -41,7 +41,7 @@
             <h5 class="card-title">
                 <i class="bi bi-arrow-down-circle"></i> Receitas
             </h5>
-            <div class="metric-value">R$ {{ "%.2f"|format(receitas_mes) }}</div>
+            <div class="metric-value">{{ receitas_mes|brl }}</div>
             <div class="metric-label">Total do mês</div>
         </div>
     </div>
@@ -50,7 +50,7 @@
             <h5 class="card-title">
                 <i class="bi bi-arrow-up-circle"></i> Despesas
             </h5>
-            <div class="metric-value">R$ {{ "%.2f"|format(despesas_mes) }}</div>
+            <div class="metric-value">{{ despesas_mes|brl }}</div>
             <div class="metric-label">Total do mês</div>
         </div>
     </div>
@@ -59,10 +59,10 @@
             <h5 class="card-title">
                 <i class="bi bi-graph-up-arrow"></i> Saldo Previsto
             </h5>
-            <div class="metric-value{% if saldo_previsto < 0 %} text-danger{% endif %}">R$ {{ "%.2f"|format(saldo_previsto) }}</div>
-            <div class="metric-label">Fim do mês · começa com R$ {{ "%.2f"|format(saldo_inicio_mes) }}</div>
+            <div class="metric-value{% if saldo_previsto < 0 %} text-danger{% endif %}">{{ saldo_previsto|brl }}</div>
+            <div class="metric-label">Fim do mês · começa com {{ saldo_inicio_mes|brl }}</div>
             <div class="metric-label fw-semibold {% if resultado_mes < 0 %}text-danger{% else %}text-success{% endif %}">
-                Resultado do mês: {% if resultado_mes < 0 %}−{% endif %}R$ {{ "%.2f"|format(resultado_mes|abs) }}
+                Resultado do mês: {% if resultado_mes > 0 %}+{% endif %}{{ resultado_mes|brl }}
                 {% if resultado_mes < 0 %}(gasta mais do que entra){% endif %}
             </div>
         </div>
@@ -74,42 +74,62 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Caixa: 12 meses atrás e 12 à frente</h5>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de projeção">
+                <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Seu dinheiro mês a mês</h5>
+                <div class="btn-group btn-group-sm gf-segmentos" role="group" aria-label="Como prever os próximos meses">
                     <input type="radio" class="btn-check" name="caixaModo" id="caixaEstimar" value="1" checked>
-                    <label class="btn btn-outline-primary" for="caixaEstimar" title="Completa os gastos pela média dos últimos 3 meses quando há menos lançado. Receitas: só as que estão lançadas.">Com estimativa</label>
+                    <label class="btn btn-outline-primary" for="caixaEstimar" title="Para os meses futuros, considera que você vai gastar pelo menos a sua média dos últimos 3 meses. Receitas: só as que estão lançadas.">Previsão realista</label>
                     <input type="radio" class="btn-check" name="caixaModo" id="caixaLancado" value="0">
-                    <label class="btn btn-outline-primary" for="caixaLancado" title="Só o que já está lançado: parcelas, faturas e lançamentos futuros">Só o lançado</label>
+                    <label class="btn btn-outline-primary" for="caixaLancado" title="Considera só o que já está lançado no sistema (contas, parcelas e faturas).">Só o que está lançado</label>
                 </div>
             </div>
             <div class="card-body">
-                <div class="row g-2 mb-3 text-center" id="caixaResumo">
-                    <div class="col-6 col-md"><div class="small text-muted">Saldo hoje</div><div class="fs-5 fw-semibold" data-k="saldo_hoje">–</div></div>
-                    <div class="col-6 col-md"><div class="small text-muted">Em 6 meses</div><div class="fs-5 fw-semibold" data-k="saldo_6_meses">–</div></div>
-                    <div class="col-6 col-md"><div class="small text-muted">Em 12 meses</div><div class="fs-5 fw-semibold" data-k="saldo_12_meses">–</div></div>
-                    <div class="col-6 col-md"><div class="small text-muted">Menor saldo previsto</div><div class="fs-5 fw-semibold" data-k="menor_saldo">–</div><div class="small text-muted" data-k="menor_saldo_mes"></div></div>
-                    <div class="col-12 col-md"><div class="small text-muted">Sobra média por mês</div><div class="fs-5 fw-semibold" data-k="sobra_media">–</div><div class="small text-muted">últimos 3 meses</div></div>
+                <div id="caixaFrase" class="gf-frase">Carregando…</div>
+                <div class="row g-3 mb-3 text-center" id="caixaResumo">
+                    <div class="col-6 col-md"><div class="gf-kpi-rotulo">Hoje nas contas</div><div class="gf-kpi-valor" data-k="saldo_hoje">–</div></div>
+                    <div class="col-6 col-md"><div class="gf-kpi-rotulo">Daqui a 6 meses</div><div class="gf-kpi-valor" data-k="saldo_6_meses">–</div></div>
+                    <div class="col-6 col-md"><div class="gf-kpi-rotulo">Daqui a 12 meses</div><div class="gf-kpi-valor" data-k="saldo_12_meses">–</div></div>
+                    <div class="col-6 col-md"><div class="gf-kpi-rotulo">Ponto mais baixo</div><div class="gf-kpi-valor" data-k="menor_saldo">–</div><div class="gf-kpi-nota" data-k="menor_saldo_mes"></div></div>
+                    <div class="col-12 col-md"><div class="gf-kpi-rotulo">Sobra média por mês</div><div class="gf-kpi-valor" data-k="sobra_media">–</div><div class="gf-kpi-nota">média dos últimos 3 meses</div></div>
                 </div>
-                <div id="caixaLongoChart" style="width: 100%; height: 520px;"></div>
-                <p class="small text-muted mb-0 mt-2">
-                    <strong>Como ler:</strong> linha = saldo somado das contas no fim de cada mês (contínua = real, tracejada = projeção).
-                    Barras = entradas e saídas de caixa do mês; o cartão conta no mês em que a fatura vence.
-                    Transferências entre suas contas não entram como receita nem despesa.
-                </p>
+
+                <h6 class="mt-2 mb-1">Quanto você terá nas contas no fim de cada mês</h6>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-linha"></i> Aconteceu</span>
+                    <span><i class="gf-linha gf-linha-tracejada"></i> Previsão</span>
+                </div>
+                <div id="caixaSaldoChart" class="gf-grafico" style="height: 300px;" role="img" aria-label="Saldo das contas no fim de cada mês"></div>
+
+                <h6 class="mt-4 mb-1">Quanto sobrou ou faltou em cada mês</h6>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou (entrou mais do que saiu)</span>
+                    <span><i class="gf-amostra" style="background:#e34948"></i> Faltou (saiu mais do que entrou)</span>
+                </div>
+                <div id="caixaSobraChart" class="gf-grafico" style="height: 240px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês"></div>
+
+                <p class="gf-explica"><strong>Como ler:</strong> passe o mouse (ou toque) em um mês para ver quanto entrou e saiu.
+                    A área sombreada é o futuro. Compras no cartão contam no mês em que a fatura vence.
+                    Transferências entre as suas próprias contas não contam como ganho nem gasto.</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Cash Flow Chart -->
+<!-- Dia a dia do mês -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="bi bi-graph-up"></i> Fluxo de Caixa - {{ mes_filtro }}/{{ ano_filtro }}</h5>
+                <h5 class="mb-0"><i class="bi bi-calendar3"></i> Dia a dia em {{ ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][mes_filtro-1] }} de {{ ano_filtro }}</h5>
             </div>
             <div class="card-body">
-                <div id="fluxoCaixaChart" style="width: 100%; height: 450px;"></div>
+                <div id="fluxoFrase" class="gf-frase">Carregando…</div>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-linha"></i> Saldo das contas ao fim do dia</span>
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Dia com entrada</span>
+                    <span><i class="gf-amostra" style="background:#eb6834"></i> Dia com saída</span>
+                </div>
+                <div id="fluxoCaixaChart" class="gf-grafico" style="height: 340px;" role="img" aria-label="Saldo das contas em cada dia do mês"></div>
+                <p class="gf-explica">Passe o mouse (ou toque) em um dia para ver o que entrou e saiu nele.</p>
             </div>
         </div>
     </div>
@@ -144,7 +164,7 @@
                             </div>
                             <div style="text-align: right; margin-left: 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
                                 <span class="financial-value negative" style="font-size: 1.1rem; white-space: nowrap;">
-                                    R$ {{ "%.2f"|format(pagamento.valor) }}
+                                    {{ (pagamento.valor)|brl }}
                                 </span>
                                 {% if pagamento.tipo == 'fatura' %}
                                     <a href="{{ url_for('main.ver_fatura', id=pagamento.id) }}" class="btn btn-sm btn-outline-primary">
@@ -204,7 +224,7 @@
                             </div>
                             <div style="text-align: right; margin-left: 1rem; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
                                 <span class="financial-value positive" style="font-size: 1.1rem; white-space: nowrap;">
-                                    R$ {{ "%.2f"|format(receita.valor) }}
+                                    {{ (receita.valor)|brl }}
                                 </span>
                                 {% if not receita.pago %}
                                     <button class="btn btn-sm btn-success btn-marcar-pago"
@@ -300,11 +320,11 @@
 
                             <div class="d-flex justify-content-between align-items-center">
                                 <small class="text-muted">
-                                    R$ {{ "%.2f"|format(lembrete.acumulado) }} de R$ {{ "%.2f"|format(lembrete.alvo) }}
+                                    {{ (lembrete.acumulado)|brl }} de {{ (lembrete.alvo)|brl }}
                                 </small>
                                 {% if lembrete.faltante > 0 %}
                                     <small class="text-muted">
-                                        Falta: <strong class="text-danger">R$ {{ "%.2f"|format(lembrete.faltante) }}</strong>
+                                        Falta: <strong class="text-danger">{{ (lembrete.faltante)|brl }}</strong>
                                     </small>
                                 {% endif %}
                             </div>
@@ -312,7 +332,7 @@
                             {% if lembrete.aporte_sugerido > 0 and lembrete.status != 'concluida' %}
                                 <div class="alert alert-info mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
                                     <i class="bi bi-lightbulb"></i>
-                                    <strong>Sugestão:</strong> Aporte R$ {{ "%.2f"|format(lembrete.aporte_sugerido) }}/mês
+                                    <strong>Sugestão:</strong> Aporte {{ (lembrete.aporte_sugerido)|brl }}/mês
                                     para atingir a meta no prazo.
                                 </div>
                             {% endif %}
@@ -388,10 +408,10 @@
 
                             <div class="d-flex justify-content-between align-items-center">
                                 <small class="text-muted">
-                                    Gasto: <strong class="text-danger">R$ {{ "%.2f"|format(alerta.gasto) }}</strong>
+                                    Gasto: <strong class="text-danger">{{ (alerta.gasto)|brl }}</strong>
                                 </small>
                                 <small class="text-muted">
-                                    Limite: R$ {{ "%.2f"|format(alerta.limite) }}
+                                    Limite: {{ (alerta.limite)|brl }}
                                 </small>
                             </div>
 
@@ -399,12 +419,12 @@
                                 <div class="alert alert-danger mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
                                     <i class="bi bi-exclamation-triangle"></i>
                                     <strong>Atenção:</strong> Você excedeu o orçamento em
-                                    R$ {{ "%.2f"|format(alerta.disponivel * -1) }}!
+                                    {{ (alerta.disponivel * -1)|brl }}!
                                 </div>
                             {% else %}
                                 <div class="alert alert-warning mt-2 mb-0 py-2 px-3" style="font-size: 0.85rem;">
                                     <i class="bi bi-info-circle"></i>
-                                    <strong>Disponível:</strong> R$ {{ "%.2f"|format(alerta.disponivel) }}
+                                    <strong>Disponível:</strong> {{ (alerta.disponivel)|brl }}
                                 </div>
                             {% endif %}
                         </div>
@@ -440,7 +460,7 @@
                                 <small class="text-muted" style="text-transform: capitalize;">{{ conta.tipo }}</small>
                             </div>
                             <span class="badge bg-primary">
-                                R$ {{ "%.2f"|format(conta.saldo_atual) }}
+                                {{ (conta.saldo_atual)|brl }}
                             </span>
                         </div>
                     {% else %}
@@ -477,7 +497,7 @@
                                 </small>
                             </div>
                             <span class="badge bg-warning">
-                                R$ {{ "%.2f"|format(fatura.valor_total) }}
+                                {{ (fatura.valor_total)|brl }}
                             </span>
                         </a>
                     {% else %}
@@ -619,268 +639,149 @@ document.addEventListener('DOMContentLoaded', function() {
 // Aguardar carregamento completo da página e do Plotly
 document.addEventListener('DOMContentLoaded', function() {
     // Preparar dados para o gráfico
-    // ---------- Caixa no longo prazo ----------
+    // ---------- Seu dinheiro mês a mês ----------
     (function () {
-        var brl = function (v) {
-            if (v === null || v === undefined) return '–';
-            return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-        };
+        var C = GF.COR;
         function desenhar(dados) {
             var m = dados.meses, r = dados.resumo;
             document.querySelectorAll('#caixaResumo [data-k]').forEach(function (el) {
                 var k = el.getAttribute('data-k'), v = r[k];
-                el.textContent = (k === 'menor_saldo_mes') ? (v || '') : brl(v);
-                el.classList.toggle('text-danger', typeof v === 'number' && v < 0);
+                if (k === 'menor_saldo_mes') { el.textContent = v ? 'em ' + v : ''; return; }
+                el.textContent = (v === null || v === undefined) ? '–' : GF.brl(v, true);
+                el.classList.toggle('gf-negativo', typeof v === 'number' && v < 0);
             });
-            var x = m.map(function (i) { return i.rotulo; });
+            if (!m.length) { GF.vazio('caixaSaldoChart', 'Ainda não há movimentações para mostrar.'); return; }
+
             var iHoje = m.findIndex(function (i) { return i.tipo === 'atual'; });
-            var real = m.map(function (i, k) { return k <= iHoje ? i.saldo : null; });
-            var proj = m.map(function (i, k) { return k >= iHoje ? i.saldo : null; });
-            var texto = m.map(function (i) {
-                return '<b>' + i.rotulo + '</b>' + (i.tipo === 'real' ? ' (real)' : (i.estimado ? ' (projeção c/ estimativa)' : ' (projeção)')) +
-                    '<br>Entradas: ' + brl(i.entradas) + '<br>Saídas contas: ' + brl(i.saidas_contas) +
-                    '<br>Faturas de cartão: ' + brl(i.saidas_cartoes) + '<br>Resultado: ' + brl(i.resultado) +
-                    '<br><b>Saldo fim do mês: ' + brl(i.saldo) + '</b>';
-            });
-            var cor = getComputedStyle(document.body).color || '#0f1419';
-            var traces = [
-                { x: x, y: real, name: 'Saldo (real)', type: 'scatter', mode: 'lines+markers', line: { color: '#1d9bf0', width: 3 },
-                  hovertext: texto, hoverinfo: 'text', yaxis: 'y' },
-                { x: x, y: proj, name: 'Saldo (projeção)', type: 'scatter', mode: 'lines+markers',
-                  line: { color: '#1d9bf0', width: 3, dash: 'dash' }, marker: { symbol: 'circle-open' },
-                  hovertext: texto, hoverinfo: 'text', yaxis: 'y' },
-                { x: x, y: m.map(function (i) { return i.entradas; }), name: 'Entradas', type: 'bar',
-                  marker: { color: '#00ba7c' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' },
-                { x: x, y: m.map(function (i) { return -i.saidas_contas; }), name: 'Saídas das contas', type: 'bar',
-                  marker: { color: '#f4212e' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' },
-                { x: x, y: m.map(function (i) { return -i.saidas_cartoes; }), name: 'Faturas de cartão', type: 'bar',
-                  marker: { color: '#ff7a00' }, yaxis: 'y2', hovertext: texto, hoverinfo: 'text' }
-            ];
-            var shapes = [{ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0, line: { color: '#f4212e', width: 1, dash: 'dot' } }];
-            if (iHoje >= 0) {
-                shapes.push({ type: 'rect', xref: 'x', x0: iHoje - 0.5, x1: m.length - 0.5, yref: 'paper', y0: 0, y1: 1,
-                              fillcolor: 'rgba(29,155,240,0.06)', line: { width: 0 }, layer: 'below' });
+            var futuros = m.filter(function (i) { return i.tipo !== 'real'; });
+            var negativo = futuros.find(function (i) { return i.saldo < 0; });
+            var menor = futuros.reduce(function (a, b) { return b.saldo < a.saldo ? b : a; }, futuros[0]);
+            var faltam = futuros.filter(function (i) { return i.resultado < 0; }).length;
+            if (negativo) {
+                GF.frase('caixaFrase', '<i class="bi bi-exclamation-triangle-fill"></i> <strong>Atenção:</strong> pela previsão, o dinheiro nas suas contas fica <strong>negativo em ' +
+                    GF.esc(negativo.rotulo) + '</strong> (' + GF.brl(negativo.saldo, true) + ').' +
+                    (faltam ? ' Em ' + faltam + (faltam === 1 ? ' mês' : ' meses') + ' você deve gastar mais do que recebe.' : ''), 'alerta');
+            } else if (menor) {
+                GF.frase('caixaFrase', 'Pela previsão, seu saldo <strong>continua positivo</strong> nos próximos meses. O ponto mais baixo é <strong>' +
+                    GF.brl(menor.saldo, true) + ' em ' + GF.esc(menor.rotulo) + '</strong>.' +
+                    (faltam ? ' Mas em ' + faltam + (faltam === 1 ? ' mês' : ' meses') + ' você deve gastar mais do que recebe.' : ''), faltam ? null : 'ok');
             }
-            var layout = {
-                font: { family: 'Inter, sans-serif', size: 12, color: cor },
-                barmode: 'relative', bargap: 0.25, hovermode: 'x unified',
-                margin: { l: 70, r: 20, t: 10, b: 40 },
-                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-                legend: { orientation: 'h', y: -0.12 },
-                xaxis: { tickangle: -45, anchor: 'y2' },
-                yaxis: { domain: [0.45, 1], title: 'Saldo', tickformat: ',.0f', gridcolor: 'rgba(128,128,128,0.15)', zeroline: false },
-                yaxis2: { domain: [0, 0.38], title: 'Entradas / saídas', tickformat: ',.0f', gridcolor: 'rgba(128,128,128,0.15)',
-                          zerolinecolor: 'rgba(128,128,128,0.5)' },
-                shapes: shapes,
-                annotations: iHoje >= 0 ? [{ x: x[iHoje], y: 1, yref: 'paper', text: 'hoje', showarrow: false, yanchor: 'bottom', font: { size: 11 } }] : [],
-                separators: ',.'
-            };
-            Plotly.newPlot('caixaLongoChart', traces, layout, { responsive: true, displayModeBar: false, locale: 'pt-BR' });
+
+            var x = m.map(function (i) { return i.rotulo; });
+            var dica = m.map(function (i) {
+                var quando = i.tipo === 'real' ? 'aconteceu' : (i.tipo === 'atual' ? 'mês atual' : 'previsão');
+                var saiu = i.saidas_contas + i.saidas_cartoes;
+                return '<b>' + i.rotulo + '</b> · ' + quando +
+                    '<br>Entrou: ' + GF.brl(i.entradas) +
+                    '<br>Saiu: ' + GF.brl(saiu) + (i.saidas_cartoes ? ' (' + GF.brl(i.saidas_cartoes) + ' em faturas de cartão)' : '') +
+                    '<br>' + (i.resultado >= 0 ? 'Sobrou: ' : 'Faltou: ') + GF.comSinal(i.resultado) +
+                    '<br><b>Saldo no fim do mês: ' + GF.brl(i.saldo) + '</b>' +
+                    (i.estimado ? '<br><i>inclui seus gastos médios ainda não lançados</i>' : '');
+            });
+            var futuroSombra = iHoje >= 0 ? [{ type: 'rect', xref: 'x', x0: iHoje - 0.5, x1: m.length - 0.5, yref: 'paper', y0: 0, y1: 1,
+                fillcolor: 'rgba(42,120,214,0.06)', line: { width: 0 }, layer: 'below' }] : [];
+            var marcaHoje = iHoje >= 0 ? [{ x: x[iHoje], y: 1, yref: 'paper', yanchor: 'bottom', showarrow: false,
+                text: 'hoje', font: { size: 12, color: C.tinta2 } }] : [];
+            var minimo = Math.min.apply(null, m.map(function (i) { return i.saldo; }));
+            var zonaNegativa = minimo < 0 ? [{ type: 'rect', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: minimo * 1.15, y1: 0,
+                fillcolor: 'rgba(227,73,72,0.08)', line: { width: 0 }, layer: 'below' }] : [];
+
+            var real = m.map(function (i, k) { return iHoje < 0 || k <= iHoje ? i.saldo : null; });
+            var prev = m.map(function (i, k) { return iHoje >= 0 && k >= iHoje ? i.saldo : null; });
+            GF.desenhar('caixaSaldoChart', [
+                { x: x, y: real, type: 'scatter', mode: 'lines+markers', line: { color: C.saldo, width: 2.5 },
+                  marker: { size: 8, color: C.saldo, line: { color: '#fff', width: 2 } },
+                  hovertext: dica, hoverinfo: 'text', name: 'Aconteceu' },
+                { x: x, y: prev, type: 'scatter', mode: 'lines+markers', line: { color: C.saldo, width: 2.5, dash: 'dash' },
+                  marker: { size: 8, color: '#fff', line: { color: C.saldo, width: 2 } },
+                  hovertext: dica, hoverinfo: 'text', name: 'Previsão' }
+            ], {
+                margin: { t: 22 }, shapes: futuroSombra.concat(zonaNegativa), annotations: marcaHoje.concat(minimo < 0 ? [{
+                    xref: 'paper', x: 0, xanchor: 'left', y: minimo, yanchor: 'bottom', showarrow: false,
+                    text: 'abaixo de zero', font: { size: 11, color: C.textoRuim } }] : []),
+                yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 }
+            });
+
+            GF.desenhar('caixaSobraChart', [{
+                x: x, y: m.map(function (i) { return i.resultado; }), type: 'bar',
+                marker: { color: m.map(function (i) { return i.resultado >= 0 ? C.sobrou : C.faltou; }),
+                          opacity: m.map(function (i) { return i.tipo === 'real' ? 1 : 0.75; }), cornerradius: 4 },
+                hovertext: dica, hoverinfo: 'text'
+            }], { margin: { t: 8 }, shapes: futuroSombra, yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 } });
         }
         function carregar() {
             var estimar = document.querySelector('input[name="caixaModo"]:checked').value;
             fetch('/api/caixa-longo-prazo?estimar=' + estimar)
                 .then(function (r) { return r.json(); })
                 .then(desenhar)
-                .catch(function () {
-                    document.getElementById('caixaLongoChart').textContent = 'Não foi possível carregar a projeção.';
-                });
+                .catch(function () { GF.erro('caixaSaldoChart'); GF.frase('caixaFrase', 'Não foi possível carregar a previsão.'); });
         }
         document.querySelectorAll('input[name="caixaModo"]').forEach(function (el) { el.addEventListener('change', carregar); });
-        if (window.Plotly) { carregar(); } else { window.addEventListener('load', carregar); }
+        carregar();
     })();
 
-    var projecaoData = {{ projecao_fluxo | tojson }};
-
-    console.log('Dados de projeção:', projecaoData); // Debug
-
-    // Verificar se Plotly está disponível
-    if (typeof Plotly === 'undefined') {
-        console.error('Plotly não está carregado. Tentando novamente...');
-        // Aguardar um pouco mais e tentar novamente
-        setTimeout(initChart, 500);
-        return;
-    }
-
-    initChart();
-
-    function initChart() {
-        // Verificar novamente se Plotly está disponível
-        if (typeof Plotly === 'undefined') {
-            console.error('Plotly ainda não está disponível');
-            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro: Biblioteca de gráficos não carregada. Recarregue a página.</div>';
-            return;
+    // ---------- Dia a dia do mês ----------
+    (function () {
+        var C = GF.COR;
+        var dias = {{ projecao_fluxo | tojson }};
+        if (!dias || !dias.length) { GF.vazio('fluxoCaixaChart', 'Sem dados para este mês.'); GF.frase('fluxoFrase', 'Sem movimentações neste mês.'); return; }
+        var nomeMes = {{ (['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][mes_filtro-1]) | tojson }};
+        var inicio = {{ saldo_inicio_mes | tojson }};
+        var fim = dias[dias.length - 1].saldo;
+        var pior = dias.reduce(function (a, b) { return b.saldo < a.saldo ? b : a; }, dias[0]);
+        var hoje = dias.find(function (d) { return d.is_hoje; });
+        var texto = 'Você começa ' + nomeMes + ' com <strong>' + GF.brl(inicio, true) + '</strong> e ' +
+            (dias[dias.length - 1].is_futuro || hoje ? 'deve terminar' : 'terminou') + ' com <strong>' + GF.brl(fim, true) + '</strong>.';
+        var tom = fim < 0 ? 'alerta' : null;
+        if (pior.saldo < 0) {
+            texto += ' <i class="bi bi-exclamation-triangle-fill"></i> No <strong>dia ' + pior.dia + '</strong> o saldo fica negativo (' + GF.brl(pior.saldo, true) + ').';
+            tom = 'alerta';
+        } else if (pior.saldo < Math.min(inicio, fim)) {
+            texto += ' O dia mais apertado é o <strong>dia ' + pior.dia + '</strong>, com ' + GF.brl(pior.saldo, true) + '.';
         }
+        GF.frase('fluxoFrase', texto, tom);
 
-        // Verificar se há dados
-        if (!projecaoData || projecaoData.length === 0) {
-            console.error('Nenhum dado de projeção disponível');
-            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #8b98a5;">Nenhum dado disponível para exibir o gráfico</div>';
-            return;
+        var x = dias.map(function (d) { return d.dia; });
+        var dica = dias.map(function (d) {
+            var linhas = ['<b>Dia ' + d.dia + '</b>' + (d.is_hoje ? ' · hoje' : (d.is_futuro ? ' · previsão' : ''))];
+            if (d.receitas) linhas.push('Entrou: ' + GF.brl(d.receitas));
+            if (d.despesas) linhas.push('Saiu: ' + GF.brl(d.despesas));
+            if (!d.receitas && !d.despesas) linhas.push('Sem movimentação');
+            linhas.push('<b>Saldo ao fim do dia: ' + GF.brl(d.saldo) + '</b>');
+            return linhas.join('<br>');
+        });
+        var iHoje = dias.findIndex(function (d) { return d.is_hoje; });
+        var shapes = [], anotacoes = [];
+        if (iHoje >= 0) {
+            shapes.push({ type: 'rect', xref: 'x', x0: dias[iHoje].dia + 0.5, x1: dias[dias.length - 1].dia + 0.5, yref: 'paper', y0: 0, y1: 1,
+                          fillcolor: 'rgba(42,120,214,0.06)', line: { width: 0 }, layer: 'below' });
+            shapes.push({ type: 'line', xref: 'x', x0: dias[iHoje].dia, x1: dias[iHoje].dia, yref: 'paper', y0: 0, y1: 1,
+                          line: { color: C.apagado, width: 1, dash: 'dot' } });
+            anotacoes.push({ x: dias[iHoje].dia, y: 1, yref: 'paper', yanchor: 'bottom', showarrow: false, text: 'hoje',
+                             font: { size: 12, color: C.tinta2 } });
         }
-    // Extrair dados para o gráfico
-    var dias = [];
-    var receitas = [];
-    var despesas = [];
-    var saldos = [];
-
-    projecaoData.forEach(function(item) {
-        dias.push(item.dia);
-        receitas.push(item.receitas);
-        despesas.push(item.despesas);
-        saldos.push(item.saldo);
-    });
-
-    // Preparar traces
-    var data = [];
-
-    // Linha de referência no zero
-    if (dias.length > 0) {
-        var traceZero = {
-            x: [dias[0], dias[dias.length - 1]],
-            y: [0, 0],
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Linha Zero',
-            line: {
-                color: '#8b98a5',
-                width: 1,
-                dash: 'dash'
-            },
-            hoverinfo: 'skip',
-            showlegend: false
-        };
-        data.push(traceZero);
-    }
-
-    // Trace de Receitas
-    var traceReceitas = {
-        x: dias,
-        y: receitas,
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Recebimentos',
-        line: {
-            color: '#10b981',
-            width: 2
-        },
-        marker: {
-            color: '#10b981',
-            size: 5
-        },
-        hovertemplate: '<b>Dia %{x}</b><br>Recebimentos: R$ %{y:.2f}<extra></extra>'
-    };
-    data.push(traceReceitas);
-
-    // Trace de Despesas
-    var traceDespesas = {
-        x: dias,
-        y: despesas,
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Despesas',
-        line: {
-            color: '#ff3b57',
-            width: 2
-        },
-        marker: {
-            color: '#ff3b57',
-            size: 5
-        },
-        hovertemplate: '<b>Dia %{x}</b><br>Despesas: R$ %{y:.2f}<extra></extra>'
-    };
-    data.push(traceDespesas);
-
-    // Trace de Saldo
-    var traceSaldo = {
-        x: dias,
-        y: saldos,
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Saldo',
-        line: {
-            color: '#0066ff',
-            width: 3
-        },
-        marker: {
-            color: '#0066ff',
-            size: 6
-        },
-        hovertemplate: '<b>Dia %{x}</b><br>Saldo: R$ %{y:.2f}<extra></extra>'
-    };
-    data.push(traceSaldo);
-
-    var layout = {
-        font: {
-            family: 'Inter, sans-serif',
-            size: 12,
-            color: '#0f1419'
-        },
-        hovermode: 'x unified',
-        xaxis: {
-            title: {
-                text: 'Dia do Mês',
-                font: {
-                    size: 13,
-                    weight: 600
-                }
-            },
-            showgrid: true,
-            gridcolor: 'rgba(0, 0, 0, 0.06)',
-            zeroline: false
-        },
-        yaxis: {
-            title: {
-                text: 'Valor (R$)',
-                font: {
-                    size: 13,
-                    weight: 600
-                }
-            },
-            showgrid: true,
-            gridcolor: 'rgba(0, 0, 0, 0.06)',
-            zeroline: true,
-            zerolinecolor: '#8b98a5',
-            zerolinewidth: 1
-        },
-        plot_bgcolor: 'rgba(255, 255, 255, 0.5)',
-        paper_bgcolor: 'transparent',
-        margin: {
-            l: 60,
-            r: 30,
-            t: 30,
-            b: 50
-        },
-        legend: {
-            orientation: 'h',
-            yanchor: 'bottom',
-            y: 1.02,
-            xanchor: 'right',
-            x: 1,
-            bgcolor: 'rgba(255, 255, 255, 0.8)',
-            bordercolor: 'rgba(0, 0, 0, 0.1)',
-            borderwidth: 1
+        var minimo = Math.min.apply(null, dias.map(function (d) { return d.saldo; }));
+        if (minimo < 0) {
+            shapes.push({ type: 'rect', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: minimo * 1.15, y1: 0,
+                          fillcolor: 'rgba(227,73,72,0.08)', line: { width: 0 }, layer: 'below' });
         }
-    };
-
-    var config = {
-        responsive: true,
-        displayModeBar: false
-    };
-
-        try {
-            Plotly.newPlot('fluxoCaixaChart', data, layout, config);
-            console.log('Gráfico criado com sucesso');
-
-            // Redimensionar gráfico quando a janela mudar de tamanho
-            window.addEventListener('resize', function() {
-                Plotly.Plots.resize('fluxoCaixaChart');
-            });
-        } catch (error) {
-            console.error('Erro ao criar gráfico:', error);
-            document.getElementById('fluxoCaixaChart').innerHTML = '<div style="text-align: center; padding: 50px; color: #ff3b57;">Erro ao criar gráfico: ' + escapeHtml(error.message) + '</div>';
-        }
-    }
+        // marcadores só nos dias com movimento: azul = entrou mais, laranja = saiu mais
+        var corDia = dias.map(function (d) {
+            if (!d.receitas && !d.despesas) return 'rgba(0,0,0,0)';
+            return d.receitas >= d.despesas ? C.entrou : C.saiu;
+        });
+        GF.desenhar('fluxoCaixaChart', [{
+            x: x, y: dias.map(function (d) { return d.saldo; }), type: 'scatter', mode: 'lines+markers',
+            line: { color: C.saldo, width: 2.5, shape: 'hv' },
+            marker: { size: dias.map(function (d) { return (d.receitas || d.despesas) ? 9 : 1; }), color: corDia,
+                      line: { color: '#fff', width: dias.map(function (d) { return (d.receitas || d.despesas) ? 2 : 0; }) } },
+            hovertext: dica, hoverinfo: 'text'
+        }], {
+            margin: { t: 22 }, shapes: shapes, annotations: anotacoes,
+            xaxis: { title: { text: 'dia do mês', font: { size: 12, color: C.apagado } }, dtick: 5, tick0: 1 },
+            yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 }
+        });
+    })();
 });
 </script>
 {% endblock %}

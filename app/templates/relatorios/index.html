@@ -1,858 +1,559 @@
 {% extends "base.html" %}
 
-{% block title %}Relatórios Avançados - Gestão Financeira{% endblock %}
+{% block title %}Relatórios - Gestão Financeira{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Relatórios Avançados</h1>
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4" style="margin-top: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">Relatórios</h1>
+        <p class="text-muted mb-0">Para onde vai o seu dinheiro, explicado em poucas palavras</p>
+    </div>
+    <div class="d-flex gap-2 align-items-end">
+        <div>
+            <label for="mesGlobal" class="form-label small mb-1">Mês</label>
+            <select class="form-select form-select-sm" id="mesGlobal" style="width: 140px;">
+                {% for nome in ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'] %}
+                <option value="{{ loop.index }}">{{ nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="anoGlobal" class="form-label small mb-1">Ano</label>
+            <select class="form-select form-select-sm" id="anoGlobal" style="width: 100px;"></select>
+        </div>
+    </div>
+</div>
 
-<!-- Filtros Globais -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
+<ul class="nav nav-tabs mb-4 flex-nowrap overflow-auto" id="relatoriosTabs" role="tablist" style="white-space: nowrap;">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="resumo-tab" data-bs-toggle="tab" data-bs-target="#resumo" type="button" role="tab">
+            <i class="bi bi-house"></i> Resumo
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="categorias-tab" data-bs-toggle="tab" data-bs-target="#categorias" type="button" role="tab">
+            <i class="bi bi-tags"></i> Gastos por categoria
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="evolucao-tab" data-bs-toggle="tab" data-bs-target="#evolucao" type="button" role="tab">
+            <i class="bi bi-graph-up"></i> Dinheiro nas contas
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="comparacao-tab" data-bs-toggle="tab" data-bs-target="#comparacao" type="button" role="tab">
+            <i class="bi bi-arrow-left-right"></i> Comparar meses
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="orcamentos-tab" data-bs-toggle="tab" data-bs-target="#orcamentos" type="button" role="tab">
+            <i class="bi bi-wallet2"></i> Orçamentos
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="metas-tab" data-bs-toggle="tab" data-bs-target="#metas" type="button" role="tab">
+            <i class="bi bi-trophy"></i> Metas
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="cartoes-tab" data-bs-toggle="tab" data-bs-target="#cartoes" type="button" role="tab">
+            <i class="bi bi-credit-card"></i> Cartões
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="relatoriosTabContent">
+
+    <!-- RESUMO -->
+    <div class="tab-pane fade show active" id="resumo" role="tabpanel" aria-labelledby="resumo-tab">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><span>Para onde foi o seu dinheiro em <span class="js-mes-ano"></span></span></h5></div>
             <div class="card-body">
-                <div class="row align-items-end">
-                    <div class="col-md-2">
-                        <label for="mesGlobal" class="form-label">Mês</label>
-                        <select class="form-select" id="mesGlobal">
-                            {% for i in range(1, 13) %}
-                                <option value="{{ i }}">{{ ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][i-1] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="anoGlobal" class="form-label">Ano</label>
-                        <input type="number" class="form-select" id="anoGlobal" min="2020" max="2099">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="periodoComparacao" class="form-label">Período Comparação</label>
-                        <select class="form-select" id="periodoComparacao">
-                            <option value="mensal">Mensal</option>
-                            <option value="trimestral">Trimestral</option>
-                            <option value="anual">Anual</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <button type="button" class="btn btn-primary" onclick="atualizarTodosRelatorios()">
-                            <i class="bi bi-arrow-clockwise"></i> Atualizar Relatórios
-                        </button>
-                    </div>
+                <div id="fraseCategorias" class="gf-frase">Carregando…</div>
+                <div id="graficoCategorias" class="gf-grafico" style="height: 360px;" role="img" aria-label="Gastos do mês por categoria, do maior para o menor"></div>
+                <p class="gf-explica">Cada barra é uma categoria, do maior gasto para o menor. Compras no cartão contam no dia da compra.
+                    Transferências entre as suas contas e pagamentos de fatura não entram (não são gastos novos).</p>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><span>Quanto entrou e quanto saiu em <span class="js-ano"></span></span></h5></div>
+            <div class="card-body">
+                <div id="fraseAno" class="gf-frase">Carregando…</div>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Entrou</span>
+                    <span><i class="gf-amostra" style="background:#eb6834"></i> Saiu</span>
+                    <span><i class="gf-amostra" style="background:#c3c2b7"></i> Meses futuros (o que já está lançado)</span>
                 </div>
+                <div id="graficoAno" class="gf-grafico" style="height: 320px;" role="img" aria-label="Entradas e saídas de cada mês do ano"></div>
+
+                <h6 class="mt-4 mb-1">Sobrou ou faltou em cada mês</h6>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou</span>
+                    <span><i class="gf-amostra" style="background:#e34948"></i> Faltou</span>
+                </div>
+                <div id="graficoAnoSobra" class="gf-grafico" style="height: 220px;" role="img" aria-label="Quanto sobrou ou faltou em cada mês do ano"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GASTOS POR CATEGORIA -->
+    <div class="tab-pane fade" id="categorias" role="tabpanel" aria-labelledby="categorias-tab">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><span>Ranking de gastos em <span class="js-mes-ano"></span></span></h5></div>
+            <div class="card-body">
+                <div id="fraseRanking" class="gf-frase">Carregando…</div>
+                <div id="tabelaRanking"></div>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Contas que se repetem</h5></div>
+            <div class="card-body">
+                <div id="fraseRecorrentes" class="gf-frase">Carregando…</div>
+                <div id="tabelaRecorrentes"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DINHEIRO NAS CONTAS -->
+    <div class="tab-pane fade" id="evolucao" role="tabpanel" aria-labelledby="evolucao-tab">
+        <div class="card mb-4">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0">Quanto você tinha nas contas em cada dia</h5>
+                <div class="btn-group btn-group-sm gf-segmentos" role="group" aria-label="Período">
+                    <input type="radio" class="btn-check" name="periodoEvolucao" id="evo30" value="mes">
+                    <label class="btn btn-outline-primary" for="evo30">30 dias</label>
+                    <input type="radio" class="btn-check" name="periodoEvolucao" id="evo12" value="ano" checked>
+                    <label class="btn btn-outline-primary" for="evo12">12 meses</label>
+                    <input type="radio" class="btn-check" name="periodoEvolucao" id="evoTudo" value="tudo">
+                    <label class="btn btn-outline-primary" for="evoTudo">Tudo</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="fraseEvolucao" class="gf-frase">Carregando…</div>
+                <div id="graficoEvolucao" class="gf-grafico" style="height: 360px;" role="img" aria-label="Saldo das contas ao longo do tempo"></div>
+                <p class="gf-explica">Soma do saldo de todas as suas contas. Não inclui investimentos nem o que você deve no cartão.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMPARAR MESES -->
+    <div class="tab-pane fade" id="comparacao" role="tabpanel" aria-labelledby="comparacao-tab">
+        <div class="card mb-4">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0">Entrou × saiu, período a período</h5>
+                <div class="btn-group btn-group-sm gf-segmentos" role="group" aria-label="Períodos">
+                    <input type="radio" class="btn-check" name="periodoComparacao" id="cmp6" value="mensal:6" checked>
+                    <label class="btn btn-outline-primary" for="cmp6">6 meses</label>
+                    <input type="radio" class="btn-check" name="periodoComparacao" id="cmp12" value="mensal:12">
+                    <label class="btn btn-outline-primary" for="cmp12">12 meses</label>
+                    <input type="radio" class="btn-check" name="periodoComparacao" id="cmpTri" value="trimestral:4">
+                    <label class="btn btn-outline-primary" for="cmpTri">Trimestres</label>
+                    <input type="radio" class="btn-check" name="periodoComparacao" id="cmpAno" value="anual:3">
+                    <label class="btn btn-outline-primary" for="cmpAno">Anos</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="fraseComparacao" class="gf-frase">Carregando…</div>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Entrou</span>
+                    <span><i class="gf-amostra" style="background:#eb6834"></i> Saiu</span>
+                </div>
+                <div id="graficoComparacao" class="gf-grafico" style="height: 320px;" role="img" aria-label="Entradas e saídas por período"></div>
+                <h6 class="mt-4 mb-1">Sobrou ou faltou</h6>
+                <div class="gf-legenda" aria-hidden="true">
+                    <span><i class="gf-amostra" style="background:#2a78d6"></i> Sobrou</span>
+                    <span><i class="gf-amostra" style="background:#e34948"></i> Faltou</span>
+                </div>
+                <div id="graficoSaldoPeriodo" class="gf-grafico" style="height: 220px;" role="img" aria-label="Quanto sobrou ou faltou por período"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ORÇAMENTOS -->
+    <div class="tab-pane fade" id="orcamentos" role="tabpanel" aria-labelledby="orcamentos-tab">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0"><span>Orçamento de <span class="js-mes-ano"></span>: quanto já usou de cada limite</span></h5></div>
+            <div class="card-body">
+                <div id="fraseOrcamentos" class="gf-frase">Carregando…</div>
+                <div id="listaOrcamentos"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- METAS -->
+    <div class="tab-pane fade" id="metas" role="tabpanel" aria-labelledby="metas-tab">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Suas metas</h5></div>
+            <div class="card-body">
+                <div id="fraseMetas" class="gf-frase">Carregando…</div>
+                <div id="listaMetas"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CARTÕES -->
+    <div class="tab-pane fade" id="cartoes" role="tabpanel" aria-labelledby="cartoes-tab">
+        <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Quanto do limite de cada cartão está ocupado</h5></div>
+            <div class="card-body">
+                <div id="fraseCartoes" class="gf-frase">Carregando…</div>
+                <div id="listaCartoes"></div>
+                <p class="gf-explica">O limite ocupado inclui as parcelas futuras: ele só volta a ficar livre conforme você paga as faturas.</p>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Abas de Relatórios -->
-<ul class="nav nav-tabs mb-4" id="relatoriosTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="visao-geral-tab" data-bs-toggle="tab" data-bs-target="#visao-geral" type="button">
-            <i class="bi bi-bar-chart"></i> Visão Geral
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="evolucao-tab" data-bs-toggle="tab" data-bs-target="#evolucao" type="button">
-            <i class="bi bi-graph-up"></i> Evolução Patrimonial
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="categorias-tab" data-bs-toggle="tab" data-bs-target="#categorias" type="button">
-            <i class="bi bi-pie-chart"></i> Categorias
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="orcamentos-tab" data-bs-toggle="tab" data-bs-target="#orcamentos" type="button">
-            <i class="bi bi-wallet2"></i> Orçamentos
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="metas-tab" data-bs-toggle="tab" data-bs-target="#metas" type="button">
-            <i class="bi bi-trophy"></i> Metas
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="cartoes-tab" data-bs-toggle="tab" data-bs-target="#cartoes" type="button">
-            <i class="bi bi-credit-card"></i> Cartões
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="comparacao-tab" data-bs-toggle="tab" data-bs-target="#comparacao" type="button">
-            <i class="bi bi-arrows-expand"></i> Comparações
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="investimentos-tab" data-bs-toggle="tab" data-bs-target="#investimentos" type="button">
-            <i class="bi bi-graph-up-arrow"></i> Investimentos
-        </button>
-    </li>
-</ul>
-
-<!-- Conteúdo das Abas -->
-<div class="tab-content" id="relatoriosTabContent">
-
-    <!-- ABA: Visão Geral -->
-    <div class="tab-pane fade show active" id="visao-geral" role="tabpanel">
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Gastos por Categoria</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoCategoriasGeral" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Fluxo de Caixa Anual</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoFluxoCaixaGeral" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Top 10 Categorias - Mês Atual</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoTopCategorias" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="card mb-4">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div><strong>Investimentos</strong><div class="small text-muted">Os relatórios da sua carteira ficam numa página própria.</div></div>
+        <a href="{{ url_for('investimentos.relatorios') }}" class="btn btn-outline-primary btn-sm">Abrir relatórios de investimentos</a>
     </div>
-
-    <!-- ABA: Evolução Patrimonial -->
-    <div class="tab-pane fade" id="evolucao" role="tabpanel">
-        <div class="row mb-3">
-            <div class="col-md-12">
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-primary active" onclick="carregarEvolucao('mes')">Último Mês</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="carregarEvolucao('ano')">Último Ano</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="carregarEvolucao('tudo')">Todo Histórico</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Evolução do Patrimônio</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="saldoAtualInfo" class="alert alert-info mb-3"></div>
-                        <div id="graficoEvolucao" style="height: 500px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Categorias -->
-    <div class="tab-pane fade" id="categorias" role="tabpanel">
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Distribuição por Categoria</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoCategoriaPizza" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Ranking de Gastos</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="tabelaTopCategorias"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Análise de Despesas Recorrentes</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="infoRecorrentes" class="mb-3"></div>
-                        <div id="tabelaRecorrentes"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Orçamentos -->
-    <div class="tab-pane fade" id="orcamentos" role="tabpanel">
-        <div class="row mb-3">
-            <div class="col-md-12">
-                <div id="resumoOrcamentos" class="alert alert-info"></div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Orçamentos vs Realizado</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoOrcamentos" style="height: 500px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Detalhamento por Categoria</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="tabelaOrcamentos"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Metas -->
-    <div class="tab-pane fade" id="metas" role="tabpanel">
-        <div class="row mb-3">
-            <div class="col-md-12">
-                <div id="resumoMetas" class="alert alert-info"></div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Progresso das Metas</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoMetas" style="height: 500px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Status das Metas</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="tabelaMetas"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Cartões -->
-    <div class="tab-pane fade" id="cartoes" role="tabpanel">
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Análise de Cartões de Crédito</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoCartoes" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Detalhamento dos Cartões</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="tabelaCartoes"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Comparações -->
-    <div class="tab-pane fade" id="comparacao" role="tabpanel">
-        <div class="row mb-3">
-            <div class="col-md-12">
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-primary active" onclick="carregarComparacao('mensal', 6)">6 Meses</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('mensal', 12)">12 Meses</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('trimestral', 4)">4 Trimestres</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="carregarComparacao('anual', 3)">3 Anos</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Comparação de Períodos</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoComparacao" style="height: 500px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Saldo por Período</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="graficoSaldoPeriodo" style="height: 400px;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: Investimentos -->
-    <div class="tab-pane fade" id="investimentos" role="tabpanel">
-        <iframe src="{{ url_for('investimentos.relatorios') }}"
-                style="width: 100%; height: 1200px; border: none;"
-                title="Relatórios de Investimentos">
-        </iframe>
-    </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Inicialização
-    const hoje = new Date();
-    document.getElementById('mesGlobal').value = hoje.getMonth() + 1;
-    document.getElementById('anoGlobal').value = hoje.getFullYear();
-
-    // Carregar relatórios ao carregar a página
-    window.addEventListener('load', function() {
-        atualizarTodosRelatorios();
-    });
-
-    // Função para atualizar todos os relatórios
-    function atualizarTodosRelatorios() {
-        // Visão Geral
-        carregarGraficoCategoriasGeral();
-        carregarGraficoFluxoCaixaGeral();
-        carregarTopCategorias();
-
-        // Outras abas (carregam on-demand quando clicadas)
+(function () {
+    'use strict';
+    var C = GF.COR;
+    var hoje = new Date();
+    var selMes = document.getElementById('mesGlobal');
+    var selAno = document.getElementById('anoGlobal');
+    for (var a = hoje.getFullYear() + 1; a >= 2020; a--) {
+        var op = document.createElement('option'); op.value = a; op.textContent = a; selAno.appendChild(op);
     }
+    selMes.value = hoje.getMonth() + 1;
+    selAno.value = hoje.getFullYear();
 
-    // Listener para quando trocar de aba
-    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
-        button.addEventListener('shown.bs.tab', function (event) {
-            const targetId = event.target.getAttribute('data-bs-target');
+    function mes() { return parseInt(selMes.value, 10); }
+    function ano() { return parseInt(selAno.value, 10); }
+    function rotuloMes() { return GF.mesNome(mes() - 1) + ' de ' + ano(); }
+    function atualizarTitulos() {
+        document.querySelectorAll('.js-mes-ano').forEach(function (el) { el.textContent = rotuloMes(); });
+        document.querySelectorAll('.js-ano').forEach(function (el) { el.textContent = ano(); });
+    }
+    function json(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
 
-            if (targetId === '#evolucao') {
-                carregarEvolucao('ano');
-            } else if (targetId === '#categorias') {
-                carregarCategoriasDetalhado();
-                carregarRecorrentes();
-            } else if (targetId === '#orcamentos') {
-                carregarOrcamentos();
-            } else if (targetId === '#metas') {
-                carregarMetas();
-            } else if (targetId === '#cartoes') {
-                carregarCartoes();
-            } else if (targetId === '#comparacao') {
-                carregarComparacao('mensal', 6);
-            }
+    // carrega cada aba só quando ela é aberta; filtro de mês/ano recarrega a aba visível
+    var carregadores = {
+        '#resumo': function () { carregarCategorias(); carregarAno(); },
+        '#categorias': function () { carregarRanking(); carregarRecorrentes(); },
+        '#evolucao': carregarEvolucao,
+        '#comparacao': carregarComparacao,
+        '#orcamentos': carregarOrcamentos,
+        '#metas': carregarMetas,
+        '#cartoes': carregarCartoes
+    };
+    var abaAtual = '#resumo';
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function (b) {
+        b.addEventListener('shown.bs.tab', function (e) {
+            abaAtual = e.target.getAttribute('data-bs-target');
+            carregadores[abaAtual]();
         });
     });
+    function recarregar() { atualizarTitulos(); carregadores[abaAtual](); }
+    selMes.addEventListener('change', recarregar);
+    selAno.addEventListener('change', recarregar);
 
-    // ========== VISÃO GERAL ==========
-
-    function carregarGraficoCategoriasGeral() {
-        const mes = document.getElementById('mesGlobal').value;
-        const ano = document.getElementById('anoGlobal').value;
-
-        fetch(`/api/gastos-por-categoria?mes=${mes}&ano=${ano}`)
-            .then(response => response.json())
-            .then(data => {
-                const trace = {
-                    labels: data.categorias,
-                    values: data.valores,
-                    type: 'pie'
-                };
-
-                const layout = {
-                    title: `Despesas por Categoria - ${mes}/${ano}`,
-                    height: 380
-                };
-
-                Plotly.newPlot('graficoCategoriasGeral', [trace], layout);
+    // ---------- Para onde foi o dinheiro (barras horizontais) ----------
+    function carregarCategorias() {
+        json('/api/top-categorias?mes=' + mes() + '&ano=' + ano() + '&limite=50').then(function (d) {
+            if (!d.categorias.length) {
+                GF.frase('fraseCategorias', 'Nenhum gasto lançado em ' + rotuloMes() + '.');
+                GF.vazio('graficoCategorias', 'Sem gastos neste mês.', 'Escolha outro mês no canto superior direito.');
+                return;
+            }
+            var total = d.total, nomes = d.categorias.slice(), valores = d.valores.slice();
+            var MAX = 8;
+            if (nomes.length > MAX) {   // as menores viram "Outras categorias"
+                var resto = valores.slice(MAX - 1).reduce(function (a, b) { return a + b; }, 0);
+                var qtd = nomes.length - (MAX - 1);
+                nomes = nomes.slice(0, MAX - 1).concat(['Outras (' + qtd + ')']);
+                valores = valores.slice(0, MAX - 1).concat([resto]);
+            }
+            var maior = d.categorias[0], maiorV = d.valores[0];
+            GF.frase('fraseCategorias', 'Você gastou <strong>' + GF.brl(total, true) + '</strong> em ' + GF.esc(rotuloMes()) +
+                '. O maior gasto foi <strong>' + GF.esc(maior) + '</strong>: ' + GF.brl(maiorV, true) +
+                ' (' + GF.pct(maiorV / total * 100) + ' do total).');
+            var rot = valores.map(function (v) { return GF.curto(v) + '  ·  ' + GF.pct(v / total * 100); });
+            var altura = Math.max(220, nomes.length * 40 + 30);
+            document.getElementById('graficoCategorias').style.height = altura + 'px';
+            GF.desenhar('graficoCategorias', [{
+                type: 'bar', orientation: 'h', y: nomes, x: valores, text: rot, textposition: 'outside', cliponaxis: false,
+                textfont: { color: C.tinta, size: 13 },
+                marker: { color: C.ranking, cornerradius: 4 },
+                hovertext: nomes.map(function (n, i) { return '<b>' + GF.esc(n) + '</b><br>' + GF.brl(valores[i]) + ' · ' + GF.pct(valores[i] / total * 100, 1) + ' do total'; }),
+                hoverinfo: 'text'
+            }], {
+                margin: { l: 24, r: 120 }, bargap: 0.3,
+                yaxis: { autorange: 'reversed', tickprefix: '', tickformat: '', gridcolor: 'rgba(0,0,0,0)', zeroline: false,
+                         tickfont: { color: C.tinta, size: 13 }, ticksuffix: '  ' },
+                xaxis: { visible: false, range: [0, Math.max.apply(null, valores) * 1.05] }
             });
+        }).catch(function () { GF.erro('graficoCategorias'); });
     }
 
-    function carregarGraficoFluxoCaixaGeral() {
-        const ano = document.getElementById('anoGlobal').value;
-
-        fetch(`/api/fluxo-caixa?ano=${ano}`)
-            .then(response => response.json())
-            .then(data => {
-                const traceReceitas = {
-                    x: data.meses,
-                    y: data.receitas,
-                    name: 'Receitas',
-                    type: 'bar',
-                    marker: { color: '#2ecc71' }
-                };
-
-                const traceDespesas = {
-                    x: data.meses,
-                    y: data.despesas,
-                    name: 'Despesas',
-                    type: 'bar',
-                    marker: { color: '#e74c3c' }
-                };
-
-                const layout = {
-                    title: `Fluxo de Caixa - ${ano}`,
-                    barmode: 'group',
-                    height: 380,
-                    yaxis: { title: 'Valor (R$)' }
-                };
-
-                Plotly.newPlot('graficoFluxoCaixaGeral', [traceReceitas, traceDespesas], layout);
+    // ---------- Ano: entrou × saiu + sobra ----------
+    function carregarAno() {
+        json('/api/fluxo-caixa?ano=' + ano()).then(function (d) {
+            var futuro = d.meses.map(function (_, i) {
+                return ano() > hoje.getFullYear() || (ano() === hoje.getFullYear() && i > hoje.getMonth());
             });
+            var sobra = d.receitas.map(function (r, i) { return r - d.despesas[i]; });
+            var temDados = d.receitas.some(Boolean) || d.despesas.some(Boolean);
+            if (!temDados) {
+                GF.frase('fraseAno', 'Nada lançado em ' + ano() + '.');
+                GF.vazio('graficoAno', 'Sem movimentações neste ano.'); GF.vazio('graficoAnoSobra', '');
+                return;
+            }
+            var passados = sobra.filter(function (_, i) { return !futuro[i]; });
+            var ent = d.receitas.filter(function (_, i) { return !futuro[i]; }).reduce(function (a, b) { return a + b; }, 0);
+            var sai = d.despesas.filter(function (_, i) { return !futuro[i]; }).reduce(function (a, b) { return a + b; }, 0);
+            var mesesFaltou = passados.filter(function (v) { return v < 0; }).length;
+            var ate = futuro.indexOf(true) === -1 ? '' : ' até ' + GF.mesNome(Math.max(0, futuro.indexOf(true) - 1));
+            GF.frase('fraseAno', 'Em ' + ano() + ate + ': entrou <strong>' + GF.brl(ent, true) + '</strong>, saiu <strong>' +
+                GF.brl(sai, true) + '</strong> e ' + (ent - sai >= 0 ? 'sobrou' : 'faltou') + ' <strong>' + GF.brl(Math.abs(ent - sai), true) + '</strong>.' +
+                (mesesFaltou ? ' Em <strong>' + mesesFaltou + (mesesFaltou === 1 ? ' mês' : ' meses') + '</strong> você gastou mais do que recebeu.' : ''),
+                ent - sai < 0 ? 'alerta' : null);
+            var x = d.meses.map(function (_, i) { return GF.mesCurto(i); });
+            var dica = d.meses.map(function (_, i) {
+                return '<b>' + GF.mesNome(i) + '</b>' + (futuro[i] ? ' · previsto (só o já lançado)' : '') +
+                    '<br>Entrou: ' + GF.brl(d.receitas[i]) + '<br>Saiu: ' + GF.brl(d.despesas[i]) +
+                    '<br>' + (sobra[i] >= 0 ? 'Sobrou: ' : 'Faltou: ') + GF.comSinal(sobra[i]);
+            });
+            var cinza = function (cor) { return futuro.map(function (f) { return f ? '#c3c2b7' : cor; }); };
+            GF.desenhar('graficoAno', [
+                { type: 'bar', x: x, y: d.receitas, name: 'Entrou', marker: { color: cinza(C.entrou), cornerradius: 4 }, hovertext: dica, hoverinfo: 'text' },
+                { type: 'bar', x: x, y: d.despesas, name: 'Saiu', marker: { color: cinza(C.saiu), cornerradius: 4,
+                    pattern: { shape: futuro.map(function (f) { return f ? '/' : ''; }), fgcolor: '#ffffff', size: 6 } }, hovertext: dica, hoverinfo: 'text' }
+            ], { barmode: 'group', margin: { t: 8 } });
+            GF.desenhar('graficoAnoSobra', [{
+                type: 'bar', x: x, y: sobra, hovertext: dica, hoverinfo: 'text',
+                marker: { color: sobra.map(function (v, i) { return futuro[i] ? '#c3c2b7' : (v >= 0 ? C.sobrou : C.faltou); }), cornerradius: 4 }
+            }], { margin: { t: 8 }, yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 } });
+        }).catch(function () { GF.erro('graficoAno'); });
     }
 
-    function carregarTopCategorias() {
-        const mes = document.getElementById('mesGlobal').value;
-        const ano = document.getElementById('anoGlobal').value;
-
-        fetch(`/api/top-categorias?mes=${mes}&ano=${ano}&limite=10`)
-            .then(response => response.json())
-            .then(data => {
-                const trace = {
-                    x: data.valores,
-                    y: data.categorias,
-                    type: 'bar',
-                    orientation: 'h',
-                    marker: { color: data.cores }
-                };
-
-                const layout = {
-                    title: 'Top 10 Categorias',
-                    height: 380,
-                    xaxis: { title: 'Valor (R$)' },
-                    margin: { l: 150 }
-                };
-
-                Plotly.newPlot('graficoTopCategorias', [trace], layout);
+    // ---------- Ranking (tabela com barra) ----------
+    function carregarRanking() {
+        json('/api/top-categorias?mes=' + mes() + '&ano=' + ano() + '&limite=50').then(function (d) {
+            var el = document.getElementById('tabelaRanking');
+            if (!d.categorias.length) {
+                GF.frase('fraseRanking', 'Nenhum gasto lançado em ' + rotuloMes() + '.');
+                GF.vazio(el, 'Sem gastos neste mês.', 'Escolha outro mês no canto superior direito.');
+                return;
+            }
+            var top3 = d.valores.slice(0, 3).reduce(function (a, b) { return a + b; }, 0);
+            GF.frase('fraseRanking', 'As <strong>3 maiores categorias</strong> somam ' + GF.brl(top3, true) + ', ou <strong>' +
+                GF.pct(top3 / d.total * 100) + '</strong> de tudo o que você gastou em ' + GF.esc(rotuloMes()) + '.');
+            var maior = d.valores[0];
+            var html = '<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr>' +
+                '<th>#</th><th>Categoria</th><th class="d-none d-md-table-cell" style="width:35%"></th><th class="text-end">Gasto</th><th class="text-end">Do total</th><th class="text-end d-none d-sm-table-cell">Lançamentos</th></tr></thead><tbody>';
+            d.categorias.forEach(function (nome, i) {
+                html += '<tr><td class="text-muted">' + (i + 1) + '</td><td class="fw-semibold">' + GF.esc(nome) + '</td>' +
+                    '<td class="d-none d-md-table-cell">' + GF.barraProgresso(d.valores[i] / maior * 100, C.ranking, nome) + '</td>' +
+                    '<td class="text-end gf-num">' + GF.brl(d.valores[i]) + '</td>' +
+                    '<td class="text-end gf-num">' + GF.pct(d.valores[i] / d.total * 100, 1) + '</td>' +
+                    '<td class="text-end gf-num d-none d-sm-table-cell">' + d.quantidades[i] + '</td></tr>';
             });
-    }
-
-    // ========== EVOLUÇÃO PATRIMONIAL ==========
-
-    function carregarEvolucao(periodo) {
-        fetch(`/api/evolucao-patrimonial?periodo=${periodo}`)
-            .then(response => response.json())
-            .then(data => {
-                // Atualizar info do saldo
-                document.getElementById('saldoAtualInfo').innerHTML = `
-                    <strong>Saldo Atual Total:</strong> R$ ${data.saldo_atual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                `;
-
-                const trace = {
-                    x: data.datas,
-                    y: data.valores,
-                    type: 'scatter',
-                    mode: 'lines',
-                    fill: 'tozeroy',
-                    line: { color: '#3498db', width: 2 }
-                };
-
-                const layout = {
-                    title: 'Evolução do Patrimônio',
-                    height: 480,
-                    xaxis: { title: 'Data' },
-                    yaxis: { title: 'Patrimônio (R$)' }
-                };
-
-                Plotly.newPlot('graficoEvolucao', [trace], layout);
-            });
-    }
-
-    // ========== CATEGORIAS DETALHADO ==========
-
-    function carregarCategoriasDetalhado() {
-        const mes = document.getElementById('mesGlobal').value;
-        const ano = document.getElementById('anoGlobal').value;
-
-        fetch(`/api/top-categorias?mes=${mes}&ano=${ano}&limite=15`)
-            .then(response => response.json())
-            .then(data => {
-                // Gráfico de pizza
-                const tracePizza = {
-                    labels: data.categorias,
-                    values: data.valores,
-                    type: 'pie',
-                    marker: { colors: data.cores }
-                };
-
-                Plotly.newPlot('graficoCategoriaPizza', [tracePizza], {
-                    height: 380,
-                    title: 'Distribuição de Despesas'
-                });
-
-                // Tabela
-                let html = '<table class="table table-striped">';
-                html += '<thead><tr><th>Categoria</th><th>Quantidade</th><th>Total</th><th>% do Total</th></tr></thead>';
-                html += '<tbody>';
-
-                for (let i = 0; i < data.categorias.length; i++) {
-                    const percentual = (data.valores[i] / data.total * 100).toFixed(1);
-                    html += `<tr>
-                        <td><span style="width: 12px; height: 12px; background-color: ${safeColor(data.cores[i])}; display: inline-block; margin-right: 8px;"></span>${escapeHtml(data.categorias[i])}</td>
-                        <td>${data.quantidades[i]} transações</td>
-                        <td>R$ ${data.valores[i].toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>${percentual}%</td>
-                    </tr>`;
-                }
-
-                html += '</tbody></table>';
-                document.getElementById('tabelaTopCategorias').innerHTML = html;
-            });
+            html += '<tr class="fw-bold"><td></td><td>Total</td><td class="d-none d-md-table-cell"></td><td class="text-end gf-num">' + GF.brl(d.total) +
+                '</td><td class="text-end">100%</td><td class="d-none d-sm-table-cell"></td></tr></tbody></table></div>';
+            el.innerHTML = html;
+        }).catch(function () { GF.erro('tabelaRanking'); });
     }
 
     function carregarRecorrentes() {
-        fetch('/api/analise-recorrentes')
-            .then(response => response.json())
-            .then(data => {
-                // Info resumo
-                document.getElementById('infoRecorrentes').innerHTML = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <strong>Total de Despesas Recorrentes:</strong> ${data.quantidade}
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Impacto Mensal Estimado:</strong> R$ ${data.total_mensal_estimado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                    </div>
-                `;
-
-                // Tabela
-                let html = '<table class="table table-striped">';
-                html += '<thead><tr><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Frequência</th><th>Próxima Data</th><th>Impacto Mensal</th></tr></thead>';
-                html += '<tbody>';
-
-                data.recorrentes.forEach(rec => {
-                    html += `<tr>
-                        <td>${escapeHtml(rec.descricao)}</td>
-                        <td>${escapeHtml(rec.categoria)}</td>
-                        <td>R$ ${rec.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td><span class="badge bg-info">${escapeHtml(rec.frequencia)}</span></td>
-                        <td>${new Date(rec.proxima_data).toLocaleDateString('pt-BR')}</td>
-                        <td>R$ ${rec.impacto_mensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                    </tr>`;
-                });
-
-                html += '</tbody></table>';
-                document.getElementById('tabelaRecorrentes').innerHTML = html;
+        var FREQ = { semanal: 'toda semana', quinzenal: 'a cada 15 dias', mensal: 'todo mês', bimestral: 'a cada 2 meses',
+                     trimestral: 'a cada 3 meses', semestral: 'a cada 6 meses', anual: 'todo ano' };
+        json('/api/analise-recorrentes').then(function (d) {
+            var el = document.getElementById('tabelaRecorrentes');
+            if (!d.recorrentes.length) {
+                GF.frase('fraseRecorrentes', 'Nenhuma conta repetida prevista para os próximos 30 dias.');
+                el.innerHTML = '';
+                return;
+            }
+            GF.frase('fraseRecorrentes', 'Nos próximos 30 dias há <strong>' + d.quantidade + ' lançamentos que se repetem</strong>. Juntos, pesam cerca de <strong>' +
+                GF.brl(d.total_mensal_estimado, true) + ' por mês</strong>.');
+            var lista = d.recorrentes.slice().sort(function (a, b) { return a.proxima_data < b.proxima_data ? -1 : 1; });
+            var html = '<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Próxima data</th><th>Descrição</th>' +
+                '<th class="d-none d-md-table-cell">Categoria</th><th>Repete</th><th class="text-end">Valor</th></tr></thead><tbody>';
+            lista.forEach(function (r) {
+                var dt = r.proxima_data.split('-');
+                html += '<tr><td class="gf-num">' + dt[2] + '/' + dt[1] + '</td><td>' + GF.esc(r.descricao) + '</td>' +
+                    '<td class="d-none d-md-table-cell text-muted">' + GF.esc(r.categoria) + '</td>' +
+                    '<td>' + GF.esc(FREQ[r.frequencia] || r.frequencia || '—') + '</td>' +
+                    '<td class="text-end gf-num">' + GF.brl(r.valor) + '</td></tr>';
             });
+            el.innerHTML = html + '</tbody></table></div>';
+        }).catch(function () { GF.erro('tabelaRecorrentes'); });
     }
 
-    // ========== ORÇAMENTOS ==========
+    // ---------- Dinheiro nas contas ----------
+    function carregarEvolucao() {
+        var periodo = document.querySelector('input[name="periodoEvolucao"]:checked').value;
+        json('/api/evolucao-patrimonial?periodo=' + periodo).then(function (d) {
+            if (!d.datas.length) { GF.vazio('graficoEvolucao', 'Sem dados.'); return; }
+            var ini = d.valores[0], fim = d.valores[d.valores.length - 1], dif = fim - ini;
+            var dataIni = d.datas[0].split('-').reverse().join('/');
+            var menorI = d.valores.indexOf(Math.min.apply(null, d.valores));
+            GF.frase('fraseEvolucao', 'Hoje você tem <strong>' + GF.brl(fim, true) + '</strong> nas contas. Em ' + dataIni + ' tinha ' +
+                GF.brl(ini, true) + ': ' + (dif >= 0 ? 'aumentou' : 'diminuiu') + ' <strong>' + GF.brl(Math.abs(dif), true) + '</strong>.' +
+                (d.valores[menorI] < 0 ? ' O saldo ficou negativo em alguns dias (o mais baixo foi ' + GF.brl(d.valores[menorI], true) + ').' : ''),
+                dif < 0 ? 'alerta' : null);
+            var dica = d.datas.map(function (s, i) { return '<b>' + s.split('-').reverse().join('/') + '</b><br>Saldo: ' + GF.brl(d.valores[i]); });
+            GF.desenhar('graficoEvolucao', [{
+                type: 'scatter', mode: 'lines', x: d.datas, y: d.valores, line: { color: C.saldo, width: 2.5, shape: 'hv' },
+                fill: 'tozeroy', fillcolor: 'rgba(42,120,214,0.10)', hovertext: dica, hoverinfo: 'text'
+            }], {
+                hovermode: 'x', margin: { t: 8 },
+                xaxis: { type: 'date', tickformat: periodo === 'mes' ? '%d/%m' : '%m/%Y', hoverformat: '%d/%m/%Y' },
+                yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 }
+            });
+        }).catch(function () { GF.erro('graficoEvolucao'); });
+    }
+    document.querySelectorAll('input[name="periodoEvolucao"]').forEach(function (el) { el.addEventListener('change', carregarEvolucao); });
 
+    // ---------- Comparar meses ----------
+    function carregarComparacao() {
+        var v = document.querySelector('input[name="periodoComparacao"]:checked').value.split(':');
+        json('/api/comparacao-periodos?tipo=' + v[0] + '&quantidade=' + v[1]).then(function (d) {
+            var n = d.periodos.length;
+            if (!n) { GF.vazio('graficoComparacao', 'Sem dados.'); return; }
+            var ult = n - 1, ant = n - 2;
+            var mediaSai = d.despesas.reduce(function (a, b) { return a + b; }, 0) / n;
+            var negativos = d.saldos.filter(function (s) { return s < 0; }).length;
+            var txt = 'Em média você gastou <strong>' + GF.brl(mediaSai, true) + '</strong> por período.';
+            if (ant >= 0 && d.despesas[ant] > 0) {
+                var varPct = (d.despesas[ult] - d.despesas[ant]) / d.despesas[ant] * 100;
+                txt += ' Em <strong>' + GF.esc(d.periodos[ult]) + '</strong> seus gastos ' + (varPct >= 0 ? 'subiram ' : 'caíram ') +
+                    '<strong>' + GF.pct(Math.abs(varPct)) + '</strong> em relação a ' + GF.esc(d.periodos[ant]) + '.';
+            }
+            if (negativos) txt += ' Em <strong>' + negativos + ' dos ' + n + ' períodos</strong> você gastou mais do que recebeu.';
+            GF.frase('fraseComparacao', txt, negativos > n / 2 ? 'alerta' : null);
+            var dica = d.periodos.map(function (p, i) {
+                return '<b>' + GF.esc(p) + '</b><br>Entrou: ' + GF.brl(d.receitas[i]) + '<br>Saiu: ' + GF.brl(d.despesas[i]) +
+                    '<br>' + (d.saldos[i] >= 0 ? 'Sobrou: ' : 'Faltou: ') + GF.comSinal(d.saldos[i]);
+            });
+            GF.desenhar('graficoComparacao', [
+                { type: 'bar', x: d.periodos, y: d.receitas, name: 'Entrou', marker: { color: C.entrou, cornerradius: 4 }, hovertext: dica, hoverinfo: 'text' },
+                { type: 'bar', x: d.periodos, y: d.despesas, name: 'Saiu', marker: { color: C.saiu, cornerradius: 4 }, hovertext: dica, hoverinfo: 'text' }
+            ], { barmode: 'group', margin: { t: 8 } });
+            GF.desenhar('graficoSaldoPeriodo', [{
+                type: 'bar', x: d.periodos, y: d.saldos, hovertext: dica, hoverinfo: 'text',
+                text: d.saldos.map(function (s) { return GF.curto(s); }), textposition: 'outside', cliponaxis: false,
+                textfont: { color: C.tinta2, size: 12 },
+                marker: { color: d.saldos.map(function (s) { return s >= 0 ? C.sobrou : C.faltou; }), cornerradius: 4 }
+            }], { margin: { t: 20 }, yaxis: { zerolinecolor: C.apagado, zerolinewidth: 1.5 } });
+        }).catch(function () { GF.erro('graficoComparacao'); });
+    }
+    document.querySelectorAll('input[name="periodoComparacao"]').forEach(function (el) { el.addEventListener('change', carregarComparacao); });
+
+    // ---------- Orçamentos ----------
+    function situacaoOrcamento(o) {
+        if (o.percentual > 100) return { tipo: 'critico', texto: 'Estourou', cor: C.critico };
+        if (o.status === 'alerta' || o.percentual >= 100) return { tipo: 'atencao', texto: 'Perto do limite', cor: C.atencao };
+        return { tipo: 'bom', texto: 'Dentro do limite', cor: C.bom };
+    }
     function carregarOrcamentos() {
-        const mes = document.getElementById('mesGlobal').value;
-        const ano = document.getElementById('anoGlobal').value;
-
-        fetch(`/api/orcamentos-vs-realizado?mes=${mes}&ano=${ano}`)
-            .then(response => response.json())
-            .then(data => {
-                // Resumo
-                document.getElementById('resumoOrcamentos').innerHTML = `
-                    <div class="row">
-                        <div class="col-md-4">
-                            <strong>Total Orçado:</strong> R$ ${data.total_orcado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Total Gasto:</strong> R$ ${data.total_gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Saldo:</strong> <span class="${data.total_gasto > data.total_orcado ? 'text-danger' : 'text-success'}">
-                                R$ ${(data.total_orcado - data.total_gasto).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                            </span>
-                        </div>
-                    </div>
-                `;
-
-                // Gráfico
-                const categorias = data.orcamentos.map(o => o.categoria);
-                const orcados = data.orcamentos.map(o => o.orcado);
-                const gastos = data.orcamentos.map(o => o.gasto);
-
-                const traceOrcado = {
-                    x: categorias,
-                    y: orcados,
-                    name: 'Orçado',
-                    type: 'bar',
-                    marker: { color: '#3498db' }
-                };
-
-                const traceGasto = {
-                    x: categorias,
-                    y: gastos,
-                    name: 'Gasto',
-                    type: 'bar',
-                    marker: { color: '#e74c3c' }
-                };
-
-                Plotly.newPlot('graficoOrcamentos', [traceOrcado, traceGasto], {
-                    title: 'Orçamentos vs Realizado',
-                    barmode: 'group',
-                    height: 480,
-                    yaxis: { title: 'Valor (R$)' }
-                });
-
-                // Tabela
-                let html = '<table class="table table-striped">';
-                html += '<thead><tr><th>Categoria</th><th>Orçado</th><th>Gasto</th><th>Saldo</th><th>% Utilizado</th><th>Status</th></tr></thead>';
-                html += '<tbody>';
-
-                data.orcamentos.forEach(orc => {
-                    let statusClass = orc.status === 'ok' ? 'success' : orc.status === 'alerta' ? 'warning' : 'danger';
-                    let statusText = orc.status === 'ok' ? 'OK' : orc.status === 'alerta' ? 'Alerta' : 'Excedido';
-
-                    html += `<tr>
-                        <td>${escapeHtml(orc.categoria)}</td>
-                        <td>R$ ${orc.orcado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>R$ ${orc.gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td class="${orc.saldo < 0 ? 'text-danger' : 'text-success'}">R$ ${orc.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>${orc.percentual}%</td>
-                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
-                    </tr>`;
-                });
-
-                html += '</tbody></table>';
-                document.getElementById('tabelaOrcamentos').innerHTML = html;
-            });
+        json('/api/orcamentos-vs-realizado?mes=' + mes() + '&ano=' + ano()).then(function (d) {
+            var el = document.getElementById('listaOrcamentos');
+            if (!d.orcamentos.length) {
+                GF.frase('fraseOrcamentos', 'Você não definiu orçamento para ' + GF.esc(rotuloMes()) + '.');
+                GF.vazio(el, 'Sem orçamento neste mês.', 'Crie limites por categoria em Orçamentos.');
+                return;
+            }
+            var estouradas = d.orcamentos.filter(function (o) { return o.percentual > 100; });
+            var usado = d.total_orcado ? d.total_gasto / d.total_orcado * 100 : 0;
+            var txt = usado > 100
+                ? 'Você já gastou <strong>' + GF.brl(d.total_gasto, true) + '</strong>, mais do que os <strong>' + GF.brl(d.total_orcado, true) +
+                  '</strong> planejados para ' + GF.esc(rotuloMes()) + ' (' + GF.pct(usado) + ' do total).'
+                : 'Você já usou <strong>' + GF.brl(d.total_gasto, true) + '</strong> de <strong>' + GF.brl(d.total_orcado, true) +
+                  '</strong> planejados para ' + GF.esc(rotuloMes()) + ' (' + GF.pct(usado) + ').';
+            txt += estouradas.length
+                ? ' <strong>' + estouradas.length + (estouradas.length === 1 ? ' categoria passou' : ' categorias passaram') + ' do limite:</strong> ' +
+                  estouradas.map(function (o) { return GF.esc(o.categoria); }).join(', ') + '.'
+                : ' Nenhuma categoria passou do limite.';
+            GF.frase('fraseOrcamentos', txt, estouradas.length ? 'alerta' : 'ok');
+            var ordem = d.orcamentos.slice().sort(function (a, b) { return b.percentual - a.percentual; });
+            el.innerHTML = ordem.map(function (o) {
+                var s = situacaoOrcamento(o);
+                var resto = o.orcado - o.gasto;
+                return '<div class="gf-item"><div class="gf-item-topo"><span class="gf-item-nome">' + GF.esc(o.categoria) + '</span>' +
+                    '<span class="d-flex align-items-center gap-2"><span class="gf-item-valor">' + GF.brl(o.gasto, true) + ' de ' + GF.brl(o.orcado, true) + '</span>' +
+                    GF.selo(s.tipo, s.texto) + '</span></div>' +
+                    GF.barraProgresso(o.percentual, s.cor, o.categoria) +
+                    '<div class="gf-item-detalhe">' + GF.pct(o.percentual) + ' usado · ' +
+                    (resto >= 0 ? 'ainda pode gastar <strong>' + GF.brl(resto, true) + '</strong>' : '<span class="gf-negativo">passou <strong>' + GF.brl(-resto, true) + '</strong> do limite</span>') +
+                    '</div></div>';
+            }).join('');
+        }).catch(function () { GF.erro('listaOrcamentos'); });
     }
 
-    // ========== METAS ==========
-
+    // ---------- Metas ----------
     function carregarMetas() {
-        fetch('/api/progresso-metas')
-            .then(response => response.json())
-            .then(data => {
-                // Resumo
-                document.getElementById('resumoMetas').innerHTML = `
-                    <div class="row">
-                        <div class="col-md-4">
-                            <strong>Total de Metas Ativas:</strong> ${data.metas.length}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Meta Total:</strong> R$ ${data.total_alvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Total Acumulado:</strong> R$ ${data.total_acumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                        </div>
-                    </div>
-                `;
-
-                // Gráfico
-                const titulos = data.metas.map(m => m.titulo);
-                const acumulados = data.metas.map(m => m.acumulado);
-                const alvos = data.metas.map(m => m.alvo);
-
-                const traceAcumulado = {
-                    x: titulos,
-                    y: acumulados,
-                    name: 'Acumulado',
-                    type: 'bar',
-                    marker: { color: '#2ecc71' }
-                };
-
-                const traceAlvo = {
-                    x: titulos,
-                    y: alvos,
-                    name: 'Meta',
-                    type: 'bar',
-                    marker: { color: '#95a5a6' }
-                };
-
-                Plotly.newPlot('graficoMetas', [traceAcumulado, traceAlvo], {
-                    title: 'Progresso das Metas',
-                    barmode: 'group',
-                    height: 480,
-                    yaxis: { title: 'Valor (R$)' }
-                });
-
-                // Tabela
-                let html = '<table class="table table-striped">';
-                html += '<thead><tr><th>Meta</th><th>Alvo</th><th>Acumulado</th><th>Faltante</th><th>% Concluído</th><th>Status</th><th>Meses Restantes</th></tr></thead>';
-                html += '<tbody>';
-
-                data.metas.forEach(meta => {
-                    let statusClass = meta.status === 'adiantado' ? 'success' : meta.status === 'no_prazo' ? 'info' : 'warning';
-                    let statusText = meta.status === 'adiantado' ? 'Adiantado' : meta.status === 'no_prazo' ? 'No Prazo' : 'Atrasado';
-
-                    html += `<tr>
-                        <td>${escapeHtml(meta.titulo)}</td>
-                        <td>R$ ${meta.alvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>R$ ${meta.acumulado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>R$ ${meta.faltante.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>
-                            <div class="progress">
-                                <div class="progress-bar" style="width: ${Math.min(meta.percentual, 100)}%">${meta.percentual}%</div>
-                            </div>
-                        </td>
-                        <td><span class="badge bg-${statusClass}">${statusText}</span></td>
-                        <td>${meta.meses_restantes} meses</td>
-                    </tr>`;
-                });
-
-                html += '</tbody></table>';
-                document.getElementById('tabelaMetas').innerHTML = html;
-            });
+        json('/api/progresso-metas').then(function (d) {
+            var el = document.getElementById('listaMetas');
+            if (!d.metas.length) {
+                GF.frase('fraseMetas', 'Você não tem metas ativas.');
+                GF.vazio(el, 'Nenhuma meta ativa.', 'Crie uma meta em Metas para acompanhar aqui.');
+                return;
+            }
+            GF.frase('fraseMetas', 'Você já juntou <strong>' + GF.brl(d.total_acumulado, true) + '</strong> de <strong>' + GF.brl(d.total_alvo, true) +
+                '</strong> somando ' + (d.metas.length === 1 ? 'sua meta' : 'suas ' + d.metas.length + ' metas') + '.');
+            el.innerHTML = d.metas.map(function (m) {
+                var s = m.status === 'atrasado' ? { tipo: 'critico', texto: 'Atrasada', cor: C.critico }
+                      : m.status === 'adiantado' ? { tipo: 'bom', texto: 'Adiantada', cor: C.bom }
+                      : { tipo: 'bom', texto: 'No ritmo', cor: C.bom };
+                var meses = Math.max(1, m.meses_restantes);
+                var porMes = Math.max(0, m.faltante) / meses;
+                return '<div class="gf-item"><div class="gf-item-topo"><span class="gf-item-nome">' + GF.esc(m.titulo) + '</span>' +
+                    '<span class="d-flex align-items-center gap-2"><span class="gf-item-valor">' + GF.brl(m.acumulado, true) + ' de ' + GF.brl(m.alvo, true) + '</span>' +
+                    GF.selo(s.tipo, s.texto) + '</span></div>' +
+                    GF.barraProgresso(m.percentual, s.cor, m.titulo) +
+                    '<div class="gf-item-detalhe">' + GF.pct(m.percentual) + ' concluído' +
+                    (m.faltante > 0 ? ' · faltam <strong>' + GF.brl(m.faltante, true) + '</strong> em ' + m.meses_restantes + (m.meses_restantes === 1 ? ' mês' : ' meses') +
+                        ' · para chegar lá, guarde cerca de <strong>' + GF.brl(porMes, true) + ' por mês</strong>' : ' · meta atingida!') +
+                    '</div><div class="gf-item-detalhe">Pelo tempo que já passou, o esperado era ter ' + GF.pct(Math.max(0, Math.min(100, m.percentual_tempo))) + '.</div></div>';
+            }).join('');
+        }).catch(function () { GF.erro('listaMetas'); });
     }
 
-    // ========== CARTÕES ==========
-
+    // ---------- Cartões ----------
     function carregarCartoes() {
-        fetch('/api/analise-cartoes')
-            .then(response => response.json())
-            .then(data => {
-                if (data.cartoes.length === 0) {
-                    document.getElementById('graficoCartoes').innerHTML = '<p class="text-center">Nenhum cartão de crédito cadastrado.</p>';
-                    document.getElementById('tabelaCartoes').innerHTML = '';
-                    return;
-                }
-
-                // Gráfico de limites
-                const nomes = data.cartoes.map(c => c.nome);
-                const utilizados = data.cartoes.map(c => c.utilizado);
-                const disponiveis = data.cartoes.map(c => c.disponivel);
-
-                const traceUtilizado = {
-                    x: nomes,
-                    y: utilizados,
-                    name: 'Utilizado',
-                    type: 'bar',
-                    marker: { color: '#e74c3c' }
-                };
-
-                const traceDisponivel = {
-                    x: nomes,
-                    y: disponiveis,
-                    name: 'Disponível',
-                    type: 'bar',
-                    marker: { color: '#2ecc71' }
-                };
-
-                Plotly.newPlot('graficoCartoes', [traceUtilizado, traceDisponivel], {
-                    title: 'Limites dos Cartões',
-                    barmode: 'stack',
-                    height: 380,
-                    yaxis: { title: 'Valor (R$)' }
-                });
-
-                // Tabela
-                let html = '<table class="table table-striped">';
-                html += '<thead><tr><th>Cartão</th><th>Bandeira</th><th>Limite Total</th><th>Utilizado</th><th>Disponível</th><th>% Uso</th><th>Faturas Abertas</th><th>Gasto Médio/Mês</th></tr></thead>';
-                html += '<tbody>';
-
-                data.cartoes.forEach(cartao => {
-                    let corPercentual = cartao.percentual > 80 ? 'danger' : cartao.percentual > 50 ? 'warning' : 'success';
-
-                    html += `<tr>
-                        <td>${escapeHtml(cartao.nome)}</td>
-                        <td>${escapeHtml(cartao.bandeira || '-')}</td>
-                        <td>R$ ${cartao.limite.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>R$ ${cartao.utilizado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>R$ ${cartao.disponivel.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                        <td>
-                            <div class="progress">
-                                <div class="progress-bar bg-${corPercentual}" style="width: ${cartao.percentual}%">${cartao.percentual}%</div>
-                            </div>
-                        </td>
-                        <td>${cartao.faturas_abertas}</td>
-                        <td>R$ ${cartao.gasto_medio_mensal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-                    </tr>`;
-                });
-
-                html += '</tbody></table>';
-                document.getElementById('tabelaCartoes').innerHTML = html;
-            });
+        json('/api/analise-cartoes').then(function (d) {
+            var el = document.getElementById('listaCartoes');
+            if (!d.cartoes.length) {
+                GF.frase('fraseCartoes', 'Nenhum cartão de crédito cadastrado.');
+                el.innerHTML = '';
+                return;
+            }
+            var lim = 0, usado = 0;
+            d.cartoes.forEach(function (c) { lim += c.limite; usado += c.utilizado; });
+            var apertados = d.cartoes.filter(function (c) { return c.percentual >= 80; });
+            GF.frase('fraseCartoes', 'Somando seus cartões, <strong>' + GF.brl(usado, true) + '</strong> do limite de ' + GF.brl(lim, true) +
+                ' estão ocupados; ainda há <strong>' + GF.brl(lim - usado, true) + ' livres</strong>.' +
+                (apertados.length ? ' <strong>' + apertados.map(function (c) { return GF.esc(c.nome); }).join(', ') + '</strong> ' +
+                    (apertados.length === 1 ? 'está' : 'estão') + ' com mais de 80% do limite usado.' : ''),
+                apertados.length ? 'alerta' : null);
+            el.innerHTML = d.cartoes.map(function (c) {
+                var s = c.percentual >= 80 ? { tipo: 'critico', texto: 'Limite quase todo usado', cor: C.critico }
+                      : c.percentual >= 50 ? { tipo: 'atencao', texto: 'Mais da metade usada', cor: C.atencao }
+                      : { tipo: 'bom', texto: 'Folga boa', cor: C.bom };
+                return '<div class="gf-item"><div class="gf-item-topo"><span class="gf-item-nome">' + GF.esc(c.nome) + '</span>' +
+                    '<span class="d-flex align-items-center gap-2"><span class="gf-item-valor">' + GF.brl(c.disponivel, true) + ' livres de ' + GF.brl(c.limite, true) + '</span>' +
+                    GF.selo(s.tipo, s.texto) + '</span></div>' +
+                    GF.barraProgresso(c.percentual, s.cor, c.nome) +
+                    '<div class="gf-item-detalhe">' + GF.pct(c.percentual) + ' ocupado (' + GF.brl(c.utilizado, true) + ') · gasto médio nos últimos 6 meses: <strong>' +
+                    GF.brl(c.gasto_medio_mensal, true) + ' por mês</strong>' +
+                    (c.faturas_abertas ? ' · ' + c.faturas_abertas + (c.faturas_abertas === 1 ? ' fatura em aberto' : ' faturas em aberto') : '') + '</div></div>';
+            }).join('');
+        }).catch(function () { GF.erro('listaCartoes'); });
     }
 
-    // ========== COMPARAÇÕES ==========
-
-    function carregarComparacao(tipo, quantidade) {
-        fetch(`/api/comparacao-periodos?tipo=${tipo}&quantidade=${quantidade}`)
-            .then(response => response.json())
-            .then(data => {
-                // Gráfico de comparação
-                const traceReceitas = {
-                    x: data.periodos,
-                    y: data.receitas,
-                    name: 'Receitas',
-                    type: 'bar',
-                    marker: { color: '#2ecc71' }
-                };
-
-                const traceDespesas = {
-                    x: data.periodos,
-                    y: data.despesas,
-                    name: 'Despesas',
-                    type: 'bar',
-                    marker: { color: '#e74c3c' }
-                };
-
-                Plotly.newPlot('graficoComparacao', [traceReceitas, traceDespesas], {
-                    title: 'Receitas vs Despesas por Período',
-                    barmode: 'group',
-                    height: 480,
-                    yaxis: { title: 'Valor (R$)' }
-                });
-
-                // Gráfico de saldo
-                const traceSaldo = {
-                    x: data.periodos,
-                    y: data.saldos,
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    marker: { size: 8 },
-                    line: { color: '#3498db', width: 2 }
-                };
-
-                Plotly.newPlot('graficoSaldoPeriodo', [traceSaldo], {
-                    title: 'Saldo (Receitas - Despesas) por Período',
-                    height: 380,
-                    yaxis: { title: 'Saldo (R$)' }
-                });
-            });
-    }
+    atualizarTitulos();
+    carregadores['#resumo']();
+})();
 </script>
 {% endblock %}

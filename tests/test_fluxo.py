@@ -143,6 +143,6 @@ def test_dashboard_mes_futuro_parte_do_saldo_projetado(app, usuarios, client_a):
         ])
         db.session.commit()
     html = client_a.get(f'/?mes={m2.month}&ano={m2.year}').get_data(as_text=True)
-    assert 'começa com R$ 4000.00' in html                      # 1000 hoje + 3000 do mês anterior
-    assert re.search(r'R\$ -1000\.00</div>', html)              # 4000 + 1000 - 6000
-    assert 'Resultado do mês: −R$ 5000.00' in html
+    assert 'começa com R$\u00a04.000,00' in html                      # 1000 hoje + 3000 do mês anterior
+    assert re.search(r'−R\$\xa01\.000,00\s*</div>', html)              # 4000 + 1000 - 6000
+    assert 'Resultado do mês: −R$\u00a05.000,00' in html

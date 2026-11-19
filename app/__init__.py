@@ -125,6 +125,16 @@ def create_app(config_class=Config):
 
     # Registrar blueprints
     from app import routes, auth, investimentos
+    @app.template_filter('brl')
+    def _brl(valor, casas=2):
+        """R$ 1.234,56 (negativo: −R$ 1.234,56)."""
+        try:
+            v = float(valor or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        texto = f'{abs(v):,.{casas}f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+        return ('−' if v < 0 else '') + 'R$\u00a0' + texto
+
     app.register_blueprint(routes.bp)
     app.register_blueprint(auth.auth)
     app.register_blueprint(investimentos.investimentos_bp)
