@@ -569,8 +569,8 @@ def nova_transacao():
                 # Calcular a data da parcela (mês seguinte)
                 data_parcela = data_compra + relativedelta(months=i-1)
 
-                # Obter ou criar fatura do mês
-                fatura = obter_ou_criar_fatura(cartao, data_parcela)
+                # Fatura em que a compra cai (depois do fechamento vai para a seguinte)
+                fatura = fatura_da_compra(cartao, data_parcela)
 
                 # Criar transação da parcela
                 descricao_parcela = f"{request.form['descricao']} ({i}/{total_parcelas})"
@@ -736,7 +736,7 @@ def editar_transacao(id):
             transacao.pago = False
             if (not transacao.fatura_id or cartao.id != cartao_antigo_id
                     or (nova_data.year, nova_data.month) != mes_antigo):
-                transacao.fatura_id = obter_ou_criar_fatura(cartao, nova_data).id
+                transacao.fatura_id = fatura_da_compra(cartao, nova_data).id
         else:
             transacao.cartao_credito_id = None
             transacao.fatura_id = None
@@ -949,6 +949,13 @@ def obter_ou_criar_fatura(cartao, data_referencia):
     db.session.flush()
 
     return fatura
+
+
+def fatura_da_compra(cartao, data_compra):
+    """Compra feita depois do dia de fechamento entra na fatura do mês seguinte."""
+    fechamento = min(cartao.dia_fechamento, monthrange(data_compra.year, data_compra.month)[1])
+    referencia = data_compra + relativedelta(months=1) if data_compra.day > fechamento else data_compra
+    return obter_ou_criar_fatura(cartao, referencia)
 
 
 def recalcular_valor_fatura(fatura_id):
@@ -1207,11 +1214,73 @@ def editar_cartao(id):
 @bp.route('/faturas')
 @login_required
 def listar_faturas():
-    """Lista todas as faturas"""
-    faturas = Fatura.query.join(CartaoCredito).filter(
-        CartaoCredito.user_id == current_user.id
-    ).order_by(Fatura.ano_referencia.desc(), Fatura.mes_referencia.desc()).all()
-    return render_template('faturas/listar.html', faturas=faturas)
+    """Faturas de todos os cartões juntas, por mês de vencimento: a pagar, atual e próximas."""
+    visao = faturas_por_vencimento(current_user.id)
+    return render_template('faturas/listar.html', **visao)
+
+
+MESES_NOME = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+              'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+
+def faturas_por_vencimento(user_id, hoje=None):
+    """
+    Junta as faturas de todos os cartões do usuário.
+    - grupos: faturas não pagas agrupadas pelo mês de vencimento (mais próximo primeiro),
+      com o total de todos os cartões em cada mês;
+    - situação de cada fatura: vencida, fechada (a pagar), atual (ainda recebe compras) ou próxima;
+    - pagas: histórico, mais recente primeiro.
+    """
+    hoje = hoje or date.today()
+    faturas = Fatura.query.join(CartaoCredito).filter(CartaoCredito.user_id == user_id).order_by(
+        Fatura.data_vencimento, CartaoCredito.nome).all()
+    itens = defaultdict(list)
+    if faturas:
+        for t in Transacao.query.filter(Transacao.fatura_id.in_([f.id for f in faturas])).order_by(
+                Transacao.data, Transacao.id).all():
+            itens[t.fatura_id].append(t)
+
+    grupos, pagas = [], []
+    atual_por_cartao = set()
+    for f in faturas:
+        total = Decimal(f.valor_total or 0)
+        pago = Decimal(f.valor_pago or 0)
+        linha = {'fatura': f, 'itens': itens.get(f.id, []), 'total': total, 'pago': pago,
+                 'falta': max(Decimal('0'), total - pago)}
+        if f.status == 'paga':
+            linha['situacao'] = 'paga'
+            pagas.append(linha)
+            continue
+        if total <= 0 and not linha['itens']:
+            continue  # fatura vazia, sem nada a mostrar
+        if f.data_vencimento < hoje:
+            linha['situacao'] = 'vencida'
+        elif f.data_fechamento < hoje:
+            linha['situacao'] = 'fechada'
+        elif f.cartao_id not in atual_por_cartao:
+            linha['situacao'] = 'atual'
+            atual_por_cartao.add(f.cartao_id)
+        else:
+            linha['situacao'] = 'proxima'
+        chave = (f.data_vencimento.year, f.data_vencimento.month)
+        if not grupos or grupos[-1]['chave'] != chave:
+            grupos.append({'chave': chave, 'rotulo': f'{MESES_NOME[chave[1] - 1].capitalize()} de {chave[0]}',
+                           'faturas': [], 'total': Decimal('0'), 'falta': Decimal('0')})
+        grupos[-1]['faturas'].append(linha)
+        grupos[-1]['total'] += total
+        grupos[-1]['falta'] += linha['falta']
+
+    cartoes = CartaoCredito.query.filter_by(user_id=user_id, ativo=True).order_by(CartaoCredito.nome).all()
+    return {
+        'grupos': grupos,
+        'pagas': list(reversed(pagas)),
+        'proximo_mes': grupos[0] if grupos else None,
+        'total_em_aberto': sum((g['falta'] for g in grupos), Decimal('0')),
+        'cartoes': cartoes,
+        'limite_total': sum((Decimal(c.limite or 0) for c in cartoes), Decimal('0')),
+        'limite_usado': sum((Decimal(c.limite_utilizado or 0) for c in cartoes), Decimal('0')),
+        'hoje': hoje,
+    }
 
 
 @bp.route('/faturas/nova', methods=['GET', 'POST'])

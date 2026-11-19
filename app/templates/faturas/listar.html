@@ -2,58 +2,157 @@
 
 {% block title %}Faturas - Gestão Financeira{% endblock %}
 
+{% macro brl(v) -%}
+R$ {{ "{:,.2f}".format(v|float).replace(",", "X").replace(".", ",").replace("X", ".") }}
+{%- endmacro %}
+
+{% macro situacao_badge(s) -%}
+{% if s == 'vencida' %}<span class="badge bg-danger">Vencida</span>
+{% elif s == 'fechada' %}<span class="badge bg-warning text-dark">Fechada · a pagar</span>
+{% elif s == 'atual' %}<span class="badge bg-primary">Atual · aberta</span>
+{% elif s == 'proxima' %}<span class="badge bg-secondary">Próxima</span>
+{% else %}<span class="badge bg-success">Paga</span>{% endif %}
+{%- endmacro %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Faturas de Cartão de Crédito</h1>
-    <a href="{{ url_for('main.nova_fatura') }}" class="btn btn-primary">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4" style="margin-top: 2rem;">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">Faturas</h1>
+        <p class="text-muted" style="margin: 0; font-size: 0.95rem;">Todos os cartões juntos, pelo mês de vencimento</p>
+    </div>
+    <a href="{{ url_for('main.nova_fatura') }}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-plus-circle"></i> Nova Fatura
     </a>
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <div class="table-responsive"><table class="table table-hover">
+<!-- Resumo -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card metric-card metric-orange">
+            <h5 class="card-title"><i class="bi bi-calendar-event"></i> Próximo vencimento</h5>
+            {% if proximo_mes %}
+            <div class="metric-value">{{ brl(proximo_mes.falta) }}</div>
+            <div class="metric-label">{{ proximo_mes.rotulo }} · {{ proximo_mes.faturas|length }} fatura(s)</div>
+            {% else %}
+            <div class="metric-value">R$ 0,00</div>
+            <div class="metric-label">Nada a pagar</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card metric-card metric-red">
+            <h5 class="card-title"><i class="bi bi-stack"></i> Total em aberto</h5>
+            <div class="metric-value">{{ brl(total_em_aberto) }}</div>
+            <div class="metric-label">Atual + próximas (inclui parcelas futuras)</div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card metric-card metric-blue">
+            <h5 class="card-title"><i class="bi bi-credit-card"></i> Limite dos cartões</h5>
+            <div class="metric-value">{{ brl(limite_total - limite_usado) }}</div>
+            <div class="metric-label">disponível de {{ brl(limite_total) }} · usado {{ brl(limite_usado) }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Faturas em aberto por mês de vencimento -->
+{% for grupo in grupos %}
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0"><i class="bi bi-calendar3"></i> Vencem em {{ grupo.rotulo }}</h5>
+        <div class="text-end">
+            <span class="fw-semibold">{{ brl(grupo.falta) }}</span>
+            <span class="text-muted small">a pagar{% if grupo.falta != grupo.total %} de {{ brl(grupo.total) }}{% endif %}</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive"><table class="table table-hover mb-0 align-middle">
             <thead>
                 <tr>
                     <th>Cartão</th>
-                    <th>Referência</th>
-                    <th>Fechamento</th>
-                    <th>Vencimento</th>
-                    <th>Valor</th>
-                    <th>Status</th>
-                    <th>Ações</th>
+                    <th>Situação</th>
+                    <th class="d-none d-md-table-cell">Fecha</th>
+                    <th>Vence</th>
+                    <th class="text-end d-none d-md-table-cell">Valor</th>
+                    <th class="text-end d-none d-md-table-cell">Pago</th>
+                    <th class="text-end">Falta</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
-                {% for fatura in faturas %}
+                {% for l in grupo.faturas %}
+                {% set f = l.fatura %}
                 <tr>
-                    <td><strong>{{ fatura.cartao.nome }}</strong></td>
-                    <td>{{ fatura.mes_referencia }}/{{ fatura.ano_referencia }}</td>
-                    <td>{{ fatura.data_fechamento.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ fatura.data_vencimento.strftime('%d/%m/%Y') }}</td>
-                    <td>R$ {{ "%.2f"|format(fatura.valor_total) }}</td>
-                    <td>
-                        {% if fatura.status == 'paga' %}
-                            <span class="badge bg-success">Paga</span>
-                        {% elif fatura.status == 'fechada' %}
-                            <span class="badge bg-warning">Fechada</span>
-                        {% elif fatura.status == 'vencida' %}
-                            <span class="badge bg-danger">Vencida</span>
-                        {% else %}
-                            <span class="badge bg-info">Aberta</span>
+                    <td class="text-nowrap"><strong>{{ f.cartao.nome }}</strong></td>
+                    <td>{{ situacao_badge(l.situacao) }}</td>
+                    <td class="d-none d-md-table-cell">{{ f.data_fechamento.strftime('%d/%m') }}</td>
+                    <td>{{ f.data_vencimento.strftime('%d/%m') }}</td>
+                    <td class="text-end text-nowrap d-none d-md-table-cell">{{ brl(l.total) }}</td>
+                    <td class="text-end text-nowrap d-none d-md-table-cell">{{ brl(l.pago) }}</td>
+                    <td class="text-end text-nowrap fw-semibold">{{ brl(l.falta) }}</td>
+                    <td class="text-end text-nowrap">
+                        {% if l.itens %}
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#itens-{{ f.id }}" aria-expanded="false" aria-controls="itens-{{ f.id }}">
+                            {{ l.itens|length }} {{ "item" if l.itens|length == 1 else "itens" }}
+                        </button>
                         {% endif %}
-                    </td>
-                    <td>
-                        <a href="{{ url_for('main.ver_fatura', id=fatura.id) }}"
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-eye"></i> Ver
+                        <a href="{{ url_for('main.ver_fatura', id=f.id) }}" class="btn btn-sm btn-outline-primary" title="Abrir fatura">
+                            <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>
-                {% else %}
+                {% if l.itens %}
+                <tr class="collapse" id="itens-{{ f.id }}">
+                    <td colspan="8" class="bg-light">
+                        <table class="table table-sm mb-0">
+                            {% for t in l.itens %}
+                            <tr>
+                                <td class="text-muted" style="width: 6rem;">{{ t.data.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ t.descricao }}</td>
+                                <td class="text-muted d-none d-md-table-cell">{{ t.categoria.nome }}</td>
+                                <td class="text-end text-nowrap {% if t.tipo == 'receita' %}text-success{% endif %}">
+                                    {% if t.tipo == 'receita' %}−{% endif %}{{ brl(t.valor) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+</div>
+{% else %}
+<div class="card mb-3"><div class="card-body text-center text-muted">Nenhuma fatura em aberto.</div></div>
+{% endfor %}
+
+<!-- Histórico -->
+{% if pagas %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-check2-circle"></i> Faturas pagas</h5>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                data-bs-target="#faturasPagas" aria-expanded="false" aria-controls="faturasPagas">
+            Mostrar {{ pagas|length }}
+        </button>
+    </div>
+    <div class="collapse" id="faturasPagas">
+        <div class="table-responsive"><table class="table table-hover mb-0">
+            <thead>
+                <tr><th>Cartão</th><th>Vencimento</th><th class="text-end">Valor</th><th class="text-end">Pago</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for l in pagas %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">
-                        Nenhuma fatura cadastrada.
+                    <td><strong>{{ l.fatura.cartao.nome }}</strong></td>
+                    <td>{{ l.fatura.data_vencimento.strftime('%d/%m/%Y') }}</td>
+                    <td class="text-end">{{ brl(l.total) }}</td>
+                    <td class="text-end">{{ brl(l.pago) }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('main.ver_fatura', id=l.fatura.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -61,4 +160,5 @@
         </table></div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
