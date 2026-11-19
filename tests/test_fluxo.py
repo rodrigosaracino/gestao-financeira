@@ -63,7 +63,8 @@ def test_caixa_com_estimativa_usa_media(app, usuarios):
         r = caixa_mensal(a['user'], meses_passados=2, meses_futuros=3, estimar=True, hoje=date(2026, 11, 15),
                          meses_media=1)
     dez = {m['mes']: m for m in r['meses']}['2026-12']
-    assert dez['estimado'] and dez['entradas'] == 3000 and dez['saidas_contas'] == 500 and dez['saidas_cartoes'] == 400
+    # gastos sobem para a média; receita não lançada não é inventada
+    assert dez['estimado'] and dez['entradas'] == 0 and dez['saidas_contas'] == 500 and dez['saidas_cartoes'] == 400
     assert r['resumo']['sobra_media'] == 2100
 
 
@@ -105,3 +106,43 @@ def test_lista_de_transacoes_totais_sem_transferencias(app, usuarios, client_a):
     assert 'R$ 500.00' in html           # despesas: sem os 400 de pagamento de fatura
     assert '+ R$ 2500.00' in html
     assert 'Fora dos totais: R$ 400.00' in html
+
+
+def test_saldo_inicio_do_mes_passado_atual_e_futuro(app, usuarios):
+    from app.models import db
+    from app.services.fluxo import saldo_inicio_do_mes
+    a, _ = usuarios
+    _cenario(app, a)
+    hoje = date(2026, 11, 15)
+    with app.app_context():
+        db.session.add_all([
+            _t(a['conta'], a['receita'], 'receita', '500', date(2026, 12, 10), pago=False),
+            _t(a['conta'], a['despesa'], 'despesa', '2000', date(2027, 1, 10), pago=False),
+        ])
+        db.session.commit()
+        assert saldo_inicio_do_mes(a['user'], date(2026, 11, 1), hoje) == 1000
+        assert saldo_inicio_do_mes(a['user'], date(2026, 10, 1), hoje) == 1000 - (3000 - 500 + 700 - 400)
+        assert saldo_inicio_do_mes(a['user'], date(2026, 12, 1), hoje) == 800    # paga a fatura de 200
+        assert saldo_inicio_do_mes(a['user'], date(2027, 1, 1), hoje) == 1300    # + receita de dezembro
+        assert saldo_inicio_do_mes(a['user'], date(2027, 2, 1), hoje) == -700    # - despesa de janeiro
+
+
+def test_dashboard_mes_futuro_parte_do_saldo_projetado(app, usuarios, client_a):
+    """Mês futuro com resultado negativo: o saldo previsto não pode partir do saldo de hoje."""
+    import re
+    from dateutil.relativedelta import relativedelta
+    from app.models import db
+    a, _ = usuarios
+    m1 = date.today().replace(day=1) + relativedelta(months=1)
+    m2 = m1 + relativedelta(months=1)
+    with app.app_context():
+        db.session.add_all([
+            _t(a['conta'], a['receita'], 'receita', '3000', m1 + relativedelta(days=4), pago=False),
+            _t(a['conta'], a['receita'], 'receita', '1000', m2 + relativedelta(days=4), pago=False),
+            _t(a['conta'], a['despesa'], 'despesa', '6000', m2 + relativedelta(days=9), pago=False),
+        ])
+        db.session.commit()
+    html = client_a.get(f'/?mes={m2.month}&ano={m2.year}').get_data(as_text=True)
+    assert 'começa com R$ 4000.00' in html                      # 1000 hoje + 3000 do mês anterior
+    assert re.search(r'R\$ -1000\.00</div>', html)              # 4000 + 1000 - 6000
+    assert 'Resultado do mês: −R$ 5000.00' in html

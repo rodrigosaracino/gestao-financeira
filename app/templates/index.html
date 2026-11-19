@@ -59,8 +59,12 @@
             <h5 class="card-title">
                 <i class="bi bi-graph-up-arrow"></i> Saldo Previsto
             </h5>
-            <div class="metric-value">R$ {{ "%.2f"|format(saldo_previsto) }}</div>
-            <div class="metric-label">Fim do mês</div>
+            <div class="metric-value{% if saldo_previsto < 0 %} text-danger{% endif %}">R$ {{ "%.2f"|format(saldo_previsto) }}</div>
+            <div class="metric-label">Fim do mês · começa com R$ {{ "%.2f"|format(saldo_inicio_mes) }}</div>
+            <div class="metric-label fw-semibold {% if resultado_mes < 0 %}text-danger{% else %}text-success{% endif %}">
+                Resultado do mês: {% if resultado_mes < 0 %}−{% endif %}R$ {{ "%.2f"|format(resultado_mes|abs) }}
+                {% if resultado_mes < 0 %}(gasta mais do que entra){% endif %}
+            </div>
         </div>
     </div>
 </div>
@@ -73,7 +77,7 @@
                 <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Caixa: 12 meses atrás e 12 à frente</h5>
                 <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de projeção">
                     <input type="radio" class="btn-check" name="caixaModo" id="caixaEstimar" value="1" checked>
-                    <label class="btn btn-outline-primary" for="caixaEstimar" title="Usa a média dos últimos 3 meses para o que ainda não está lançado (ex.: salário, gastos do dia a dia)">Com estimativa</label>
+                    <label class="btn btn-outline-primary" for="caixaEstimar" title="Completa os gastos pela média dos últimos 3 meses quando há menos lançado. Receitas: só as que estão lançadas.">Com estimativa</label>
                     <input type="radio" class="btn-check" name="caixaModo" id="caixaLancado" value="0">
                     <label class="btn btn-outline-primary" for="caixaLancado" title="Só o que já está lançado: parcelas, faturas e lançamentos futuros">Só o lançado</label>
                 </div>

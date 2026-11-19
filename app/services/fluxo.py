@@ -5,6 +5,9 @@ no futuro (projetado).
 Regras:
 - Transferência entre as próprias contas (categoria natureza='transferencia')
   não é receita nem despesa: só move saldo.
+- Estimativa (estimar=True) é conservadora: completa só os GASTOS pela média dos
+  últimos meses. Receita futura só entra se estiver lançada (contrato que acaba
+  não pode aparecer como dinheiro garantido).
 - Compras no cartão não saem do caixa na data da compra; o caixa sai quando a
   fatura é paga (passado: transações 'pagamento_cartao'; futuro: faturas em aberto
   pelo vencimento).
@@ -121,7 +124,8 @@ def caixa_mensal(user_id, meses_passados=12, meses_futuros=12, estimar=True, hoj
         totais = dict(conhecidas)
         estimado = False
         if estimar:
-            for chave in totais:
+            # conservador: receita só conta se estiver lançada; gastos sobem para a média
+            for chave in ('saidas_contas', 'saidas_cartoes'):
                 if medias[chave] > totais[chave]:
                     totais[chave] = medias[chave]
                     estimado = True
@@ -170,3 +174,18 @@ def _linha(m, entradas, saidas_contas, saidas_cartoes, saldo, tipo, estimado=Fal
         'tipo': tipo,
         'estimado': estimado,
     }
+
+
+def saldo_inicio_do_mes(user_id, mes, hoje=None):
+    """Saldo das contas no primeiro dia de `mes` (visão de caixa, só o que está lançado).
+
+    Passado e mês atual: volta a partir do saldo de hoje. Futuro: soma o que está
+    lançado para os meses entre hoje e `mes` (receitas, despesas e faturas)."""
+    hoje = hoje or date.today()
+    alvo, atual = _mes(mes), _mes(hoje)
+    distancia = (alvo.year - atual.year) * 12 + alvo.month - atual.month
+    if distancia <= 0:
+        r = caixa_mensal(user_id, meses_passados=1 - distancia, meses_futuros=1, estimar=False, hoje=hoje)
+        return Decimal(str(r['meses'][0]['saldo']))  # saldo no fim do mês anterior
+    r = caixa_mensal(user_id, meses_passados=0, meses_futuros=distancia, estimar=False, hoje=hoje)
+    return Decimal(str(r['meses'][-1]['saldo']))
