@@ -22,85 +22,65 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+    {% set ep = request.endpoint or '' %}
+    {% macro item(endpoint, icone, texto, ativo=False) -%}
+    <li class="nav-item">
+        <a class="nav-link{% if ativo %} active{% endif %}" href="{{ url_for(endpoint) }}"{% if ativo %} aria-current="page"{% endif %}>
+            <i class="bi {{ icone }}"></i> <span>{{ texto }}</span>
+        </a>
+    </li>
+    {%- endmacro %}
     <nav class="navbar navbar-expand-lg navbar-light">
-        <div class="container-fluid">
+        <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
                 <i class="bi bi-wallet2"></i> Gestão Financeira
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Abrir menu">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                {% if current_user.is_authenticated %}
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.index') }}">
-                            <i class="bi bi-house"></i> <span class="d-lg-inline">Dashboard</span>
+                    {{ item('main.index', 'bi-house', 'Início', ep == 'main.index') }}
+                    {{ item('main.listar_transacoes', 'bi-arrow-left-right', 'Transações', ep.startswith('main.') and 'transac' in ep) }}
+                    {{ item('main.listar_faturas', 'bi-receipt', 'Faturas', 'fatura' in ep) }}
+                    {{ item('main.listar_orcamentos', 'bi-calculator', 'Orçamentos', 'orcamento' in ep) }}
+                    {{ item('main.listar_metas', 'bi-trophy', 'Metas', 'meta' in ep or 'deposito' in ep) }}
+                    {{ item('main.relatorios', 'bi-bar-chart-line', 'Relatórios', ep == 'main.relatorios') }}
+                    {% set em_cadastros = ep.startswith('investimentos.') or 'conta' in ep or 'cartao' in ep or 'categoria' in ep or 'conciliacao' in ep %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle{% if em_cadastros %} active{% endif %}" href="#" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-grid"></i> <span>Cadastros</span>
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_contas') }}">
-                            <i class="bi bi-bank"></i> <span class="d-lg-inline">Contas</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_transacoes') }}">
-                            <i class="bi bi-arrow-left-right"></i> <span class="d-lg-inline">Transações</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_cartoes') }}">
-                            <i class="bi bi-credit-card"></i> <span class="d-lg-inline">Cartões</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_faturas') }}">
-                            <i class="bi bi-receipt"></i> <span class="d-lg-inline">Faturas</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.conciliacao_lista') }}">
-                            <i class="bi bi-arrow-down-up"></i> <span class="d-lg-inline">Conciliação</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_categorias') }}">
-                            <i class="bi bi-tags"></i> <span class="d-lg-inline">Categorias</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_orcamentos') }}">
-                            <i class="bi bi-calculator"></i> <span class="d-lg-inline">Orçamentos</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.listar_metas') }}">
-                            <i class="bi bi-trophy"></i> <span class="d-lg-inline">Metas</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('investimentos.index') }}">
-                            <i class="bi bi-graph-up"></i> <span class="d-lg-inline">Investimentos</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.relatorios') }}">
-                            <i class="bi bi-graph-up"></i> <span class="d-lg-inline">Relatórios</span>
-                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('main.listar_contas') }}"><i class="bi bi-bank"></i> Contas</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.listar_cartoes') }}"><i class="bi bi-credit-card"></i> Cartões</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.listar_categorias') }}"><i class="bi bi-tags"></i> Categorias</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.conciliacao_lista') }}"><i class="bi bi-arrow-down-up"></i> Importar extrato</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('investimentos.index') }}"><i class="bi bi-graph-up"></i> Investimentos</a></li>
+                        </ul>
                     </li>
                 </ul>
-                {% if current_user.is_authenticated %}
-                <div class="d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center gap-2 mt-3 mt-lg-0">
-                    <a href="{{ url_for('auth.alterar_senha') }}" class="navbar-text text-decoration-none"
-                       style="color: var(--color-text-secondary);" title="Alterar senha">
-                        <i class="bi bi-person-circle"></i> {{ current_user.nome }} <i class="bi bi-key small"></i>
-                    </a>
-                    <form method="POST" action="{{ url_for('auth.logout') }}" class="d-inline m-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-outline-danger btn-sm w-100">
-                            <i class="bi bi-box-arrow-right"></i> Sair
-                        </button>
-                    </form>
-                </div>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i> <span>{{ current_user.nome.split(' ')[0] }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('auth.alterar_senha') }}"><i class="bi bi-key"></i> Alterar senha</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="{{ url_for('auth.logout') }}" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right"></i> Sair</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
                 {% endif %}
             </div>
         </div>
