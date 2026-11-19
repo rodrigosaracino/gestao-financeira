@@ -125,3 +125,24 @@ def test_conciliar_extrato_paga_as_duas_pontas(app, usuarios):
         aplicar_conciliacao(db.session.get(ConciliacaoBancaria, conc.id))
         assert all(t.pago for t in Transacao.query.filter(Transacao.id_externo.like('TRF%')).all())
     assert _saldos(app, a['conta'], reserva) == [800, 700]
+
+
+def test_totais_separam_recebido_e_a_receber(app, usuarios, client_a):
+    from app.models import db
+    from tests.test_fluxo import _t
+    a, _ = usuarios
+    reserva = _segunda_conta(app, a)
+    hoje = date.today()
+    with app.app_context():
+        db.session.add_all([
+            _t(a['conta'], a['receita'], 'receita', '1000', hoje.replace(day=1), pago=True),
+            _t(a['conta'], a['receita'], 'receita', '2500', hoje.replace(day=1), pago=False),   # prevista
+        ])
+        db.session.commit()
+    client_a.post('/transferencias/nova', data={'conta_origem_id': a['conta'], 'conta_destino_id': reserva,
+                                                'valor': '400', 'data': hoje.replace(day=1).isoformat(), 'pago': 'on'})
+    nb = ' '
+    html = client_a.get(f'/transacoes?mes={hoje.month}&ano={hoje.year}').get_data(as_text=True)
+    assert f'R${nb}3.500,00' in html and f'recebido R${nb}1.000 · a receber R${nb}2.500' in html
+    html = client_a.get(f'/?mes={hoje.month}&ano={hoje.year}').get_data(as_text=True)
+    assert f'Recebido R${nb}1.000 · a receber R${nb}2.500' in html

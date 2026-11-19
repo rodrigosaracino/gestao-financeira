@@ -55,6 +55,9 @@
                             <div class="financial-value positive" style="font-size: 1.25rem; margin-top: 0.25rem;">
                                 {{ (total_receitas)|brl }}
                             </div>
+                            <small class="text-muted d-block" style="font-size: 0.72rem; margin-top: 0.15rem;">
+                                recebido {{ receitas_recebidas|brl(0) }} · a receber {{ receitas_a_receber|brl(0) }}
+                            </small>
                         </div>
                     </div>
                     <div class="col-12 col-md-4">
